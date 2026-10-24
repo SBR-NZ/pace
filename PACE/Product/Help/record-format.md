@@ -58,6 +58,7 @@ Each header line is `name: value`. A value that runs over several lines continue
 | `corrects` | For a correction or withdrawal | The request id of the record it corrects. |
 | `separate-from` | Optional | The request ids, separated by spaces, of earlier records that say the same thing but that the owner says are separate. The record tool writes it when a save is repeated with `--not-a-duplicate`, and searches then stop flagging those records as possible duplicates of this one. |
 | `due`, `owed-by`, `for`, `state` | Optional, for an action | The due day, a real calendar date such as `2026-11-05`, who owes it, who it is for, and `open`, `done` or `cancelled`. |
+| `owner`, `target`, `status` | Optional, for a change | For the record's project: who leads it now, its target date (a real calendar date such as `2026-11-27`) and a short status in words. `none` clears one. For each, the latest current `change` that sets it stands, as [Projects and repository references](projects.md) describes. |
 | `value`, `unit`, `period`, `definition` | For a figure | The figure as reported, its unit, the period it covers and what it means. A figure needs `value`, `period` and `definition`. |
 | `act`, `act-file`, `act-sha256` | For a confirmation | The exact act, its content file and SHA-256 of that file's exact bytes. |
 | `confirmation-request` | For a client reference | The request id of the linked owner confirmation. |
@@ -93,7 +94,7 @@ A record made from a source, another person's words or the assistant's opinion i
 
 ### Room for later formats
 
-A record may carry extra header lines with other lowercase names. A record-1 reader keeps them and shows them, but gives them no meaning. [Exact-act confirmations](confirmations.md) extend record-1 with `kind: confirmation`, the act, its exact file and SHA-256 fingerprint, source references and the owner's current words. `kind: approval-reference` holds a separate client-supplied decision linked to that same fingerprint. These kinds require additional read-back and content checks; an ordinary record is not a confirmation. The undeclared kind `approval` still has no meaning here. A file whose `format` is a later version (`record-2` and so on) is reported as not readable by record-1, not guessed at.
+A record may carry extra header lines with other lowercase names. A record-1 reader keeps them and shows them, but gives them no meaning; the one exception is `owner`, `target` and `status` on a `change` record, described above. The record tool saves those three only on a change for a real project, but never calls an earlier record wrong for carrying them. [Exact-act confirmations](confirmations.md) extend record-1 with `kind: confirmation`, the act, its exact file and SHA-256 fingerprint, source references and the owner's current words. `kind: approval-reference` holds a separate client-supplied decision linked to that same fingerprint. These kinds require additional read-back and content checks; an ordinary record is not a confirmation. The undeclared kind `approval` still has no meaning here. A file whose `format` is a later version (`record-2` and so on) is reported as not readable by record-1, not guessed at.
 
 ## Making a record by hand
 

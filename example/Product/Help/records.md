@@ -8,7 +8,7 @@ Each record is **one new file**. A saved record is never edited, renamed or repl
 
 ## What is worth keeping
 
-Useful things to keep are project changes, the owner's decisions, dated actions and follow-ups, notes about named people, reported figures with their definitions and sources, and the results of work. Not every acknowledgement or passing remark needs a record.
+Useful things to keep are project changes (including who leads a project, its target and its status, as [Projects and repository references](projects.md) describes), the owner's decisions, dated actions and follow-ups, notes about named people, reported figures with their definitions and sources, and the results of work. Not every acknowledgement or passing remark needs a record.
 
 **When to keep it is the assistant's choice**: as the conversation goes, or in one round-up when it ends. Either is fine; `captured` in the record can say which.
 

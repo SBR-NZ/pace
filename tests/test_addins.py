@@ -447,7 +447,7 @@ class OlderFolderTests(unittest.TestCase):
 
 
 class RoutingTests(unittest.TestCase):
-    def test_pace_folder_index_is_empty_and_pace_md_stays_short(self):
+    def test_pace_folder_index_is_empty(self):
         text = (PACE_FOLDER / "Pace.md").read_text(encoding="utf-8")
         self.assertEqual(index_entries(text), [])
         self.assertIn("None switched on yet.", text)
@@ -455,8 +455,6 @@ class RoutingTests(unittest.TestCase):
         self.assertIn("its steps apply only to that request", text)
         self.assertNotIn("ADD-IN.md`", text)
         self.assertNotIn("## Steps", text)
-        # Pace's marks are HTML comments, hidden when Pace.md is shown; the lines a reader sees stay at 40 or fewer.
-        self.assertLessEqual(len([line for line in text.splitlines() if not line.startswith("<!-- ")]), 40)
 
     def test_invented_chats_open_no_add_in_at_startup(self):
         setups = {

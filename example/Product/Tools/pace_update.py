@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pace by Simply Better Reports - Product updater.
+"""Pace by SBR - Product updater.
 
 Two commands:
 

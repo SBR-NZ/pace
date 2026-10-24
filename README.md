@@ -1,6 +1,6 @@
-# Pace by Simply Better Reports
+# Pace by SBR
 
-PACE is one folder that keeps your projects, records, Pace help and optional add-ins together. You keep your own copy of it in a place you choose, outside this repository. Each published release is a numbered tag, such as `v3.5.0`, and the steps below always find the newest one.
+Pace is made by SBR (Simply Better Reports). PACE is one folder that keeps your projects, records, Pace help and optional add-ins together. You keep your own copy of it in a place you choose, outside this repository. Each published release is a numbered tag, such as `v3.5.0`, and the steps below always find the newest one.
 
 ## Get PACE
 

@@ -1,4 +1,4 @@
-# Pace by Simply Better Reports
+# Pace by SBR
 
 This is the owner's Pace entry point. To start a chat, this is the only content file needed. Open linked help for a relevant task, not as a startup requirement.
 
@@ -22,6 +22,10 @@ None yet.
 - `My add-ins/` - owner-made or customised add-ins (separate from Product).
 - `Release record/` - where releases come from, the installed release and install receipts, outside Product (this copy holds an invented release record).
 
+## Rounding up
+
+When a piece of work is finished, or the owner says they are done, list anything from the chat that is not yet in the record: decisions, open questions (saved as open actions for whoever must answer them), open actions with their next step, who owes them and the due date if one was agreed, and results. Skip it when nothing is new. Save only the ones the owner picks, with `captured: at-end`, as [Rounding up](Product/Help/records.md#rounding-up) describes.
+
 ## Add-in index
 
 Each line below the mark is one add-in that is switched on: its name, its one-line purpose and the file to open. An add-in not listed is off. No add-in file is opened at the start of a chat; the one a request needs is opened then, and its steps apply only to that request. If two lines fit, ask which; if a listed file is missing, say so rather than using another. [Add-ins](Product/Help/add-ins.md) lists the shipped add-ins and explains how to switch one on, customise it or make your own.
@@ -43,4 +47,4 @@ Time zone: Pacific/Auckland
 - [Add-ins](Product/Help/add-ins.md) - switching add-ins on, customising them and making your own.
 - [Product updates](Product/Help/updates.md) - to check for an update, read `Release record/Installed release.md`, then preview the newest release; installing needs the owner's go-ahead.
 - [Assistants and dated views](Product/Help/hosts-and-views.md) - what hosts can actually do and optional pages over records.
-<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=5cf3f1a60e98 two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=1ab3bbdd6370 add-in-index=397a2d303e69 time-zone=01475f79d218 help-when-relevant=e036336592a8 -->
+<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=1ab3bbdd6370 rounding-up=338f8a57f6ab add-in-index=397a2d303e69 time-zone=01475f79d218 help-when-relevant=e036336592a8 -->

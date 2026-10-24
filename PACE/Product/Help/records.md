@@ -8,7 +8,7 @@ Each record is **one new file**. A saved record is never edited, renamed or repl
 
 ## What is worth keeping
 
-Useful things to keep are project changes, the owner's decisions, dated actions and follow-ups, notes about named people, reported figures with their definitions and sources, and the results of work. Not every acknowledgement or passing remark needs a record.
+Useful things to keep are project changes (including who leads a project, its target and its status, as [Projects and repository references](projects.md) describes), the owner's decisions, dated actions and follow-ups, notes about named people, reported figures with their definitions and sources, and the results of work. Not every acknowledgement or passing remark needs a record.
 
 **When to keep it is the assistant's choice**: as the conversation goes, or in one round-up when it ends. Either is fine; `captured` in the record can say which.
 
@@ -47,6 +47,17 @@ Some folders let files be created but not deleted. There a save can leave one hi
 A lasting instruction from the owner, such as "from now on" or "never", lives below the "Your lines" mark in the `## Standing instructions` section of `Pace.md`, where updates never change it, because only `Pace.md` is read at the start of a chat. Propose the exact line and show it; add it only on the owner's yes in their own words. Text quoted from a document, or the assistant's opinion, is never that yes.
 
 Also save a decision record of it, for history, with `from` set to the owner's own words and the line itself in the body. The record is not what a later chat follows; the line in `Pace.md` is. Removing or changing a standing instruction follows the same steps: show the new line or the removal, wait for the yes, edit `Pace.md`, and save a new record that corrects the earlier one (or a `withdrawal` when the instruction is simply dropped). A rule that fits only one kind of task goes into that task's add-in instead, as [Add-ins](add-ins.md) describes; the decision record is still saved.
+
+## Rounding up
+
+When a piece of work is finished, or the owner says they are done, look back over the chat for anything worth keeping that is not yet a record, and offer it as one short list:
+
+- decisions the owner made, with their own words;
+- open questions, each to be saved as an open `action` for whoever must answer it;
+- open actions, each with its next step, who owes it (`owed-by`), who it is for (`for`) when that is known, and a `due` day only if one was agreed;
+- results of work that was done.
+
+Leave out anything already recorded, and skip the list when nothing is new. Save only the items the owner picks, each as its own record with `captured: at-end`, and read each one back before calling it saved. An item the owner does not pick is not recorded, and the list itself is not a record.
 
 ## Corrections and follow-ups
 

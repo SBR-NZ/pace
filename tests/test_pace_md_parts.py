@@ -69,7 +69,7 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(shipped, {part["id"]: part["fingerprint"] for part in parts})
         self.assertEqual(pu.assemble_pace_md(parts, shipped), TEMPLATE)  # a fresh copy is already in the written form
         self.assertEqual([part["id"] for part in parts], ["intro", "two-boundaries", "standing-instructions",
-                         "where-things-belong", "add-in-index", "time-zone", "help-when-relevant"])
+                         "where-things-belong", "rounding-up", "add-in-index", "time-zone", "help-when-relevant"])
         # The example is a folder made from this release whose owner edited two lines of "Where things belong".
         example = (EXAMPLE / "Pace.md").read_text(encoding="utf-8")
         example_parts, example_shipped = pu.pace_md_parts(example)
@@ -77,6 +77,24 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(pu.assemble_pace_md(example_parts, example_shipped), example)
         planned = pu.plan_pace_md(example.encode("utf-8"), TEMPLATE.encode("utf-8"))
         self.assertEqual((planned["status"], planned["parts"]), ("current", {"kept_changed": ["Where things belong"]}))
+
+    def test_rounding_up_is_one_of_paces_parts_with_its_detail_in_records_help(self):
+        parts = {part["id"]: part for part in pu.pace_md_parts(TEMPLATE)[0]}
+        rounding = "\n".join(parts["rounding-up"]["pace"])
+        self.assertIsNone(parts["rounding-up"]["yours"])  # Pace's own part: no owner lines, so updates keep it current
+        for phrase in ("When a piece of work is finished, or the owner says they are done", "not yet in the record",
+                       "open questions (saved as open actions for whoever must answer them)", "the due date if one was agreed",
+                       "Skip it when nothing is new", "Save only the ones the owner picks", "`captured: at-end`",
+                       "(Product/Help/records.md#rounding-up)"):
+            self.assertIn(phrase, rounding)
+        example = {part["id"]: part for part in pu.pace_md_parts((EXAMPLE / "Pace.md").read_text(encoding="utf-8"))[0]}
+        self.assertEqual(example["rounding-up"]["pace"], parts["rounding-up"]["pace"])
+        help_text = (PACE_FOLDER / "Product/Help/records.md").read_text(encoding="utf-8")
+        section = help_text[help_text.index("## Rounding up\n"):help_text.index("## Corrections and follow-ups")]
+        for phrase in ("one short list", "open `action` for whoever must answer it", "a `due` day only if one was agreed",
+                       "skip the list when nothing is new", "Save only the items the owner picks", "`captured: at-end`",
+                       "read each one back before calling it saved", "the list itself is not a record"):
+            self.assertIn(phrase, section)
 
     def test_the_owners_lines_sit_below_a_mark_in_three_parts(self):
         for text in (TEMPLATE, (EXAMPLE / "Pace.md").read_text(encoding="utf-8")):

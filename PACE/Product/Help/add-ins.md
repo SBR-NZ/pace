@@ -34,7 +34,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 | Xero | Reading figures from Xero, only through the owner's own Xero connection when the host has one. |
 | Contracts | Setting down how one workbook or recurring job must work, and reading back what is built. |
 
-Project overview is the only add-in that makes a page. Its page template, `overview-template.html`, sits beside its `ADD-IN.md`, and any assistant fills it in by hand: the page is one self-contained HTML file with no script, link, image, font or network use. The other add-ins answer in chat with plain lists; the owner can ask for any answer to be kept as a dated view.
+Project overview is the only add-in that makes a page. Its page template, `overview-template.html`, sits beside its `ADD-IN.md`. An assistant that can run Python makes the page with `Product/Tools/pace_overview.py`; any other assistant fills the template in by hand. The page is one self-contained HTML file in SBR's brand, with no script, link, image file, font or network use; its only drawing is the SBR wordmark, kept in the template. The other add-ins answer in chat with plain lists; the owner can ask for any answer to be kept as a dated view.
 
 ## Switching one on or off
 

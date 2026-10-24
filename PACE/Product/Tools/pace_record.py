@@ -22,6 +22,7 @@ import json
 import os
 import re
 import secrets
+import stat
 import string
 import sys
 import time
@@ -67,11 +68,12 @@ LATER_KINDS = ("approval",)  # Old undeclared kind; never means confirmation.
 ORIGINS = ("owner", "person", "source", "agent")
 CAPTURED = ("as-we-go", "at-end")
 ACTION_STATES = ("open", "done", "cancelled")
+PROJECT_FIELDS = ("owner", "target", "status")  # set by a change record; the latest one that sets each stands
 REPEATABLE = ("subject", "source")
 RECORD_ORDER = (
     "format", "request", "created", "project", "kind", "subject", "from",
     "who", "words", "source", "by", "captured", "corrects", "separate-from", "due", "owed-by",
-    "for", "state", "value", "unit", "period", "definition",
+    "for", "state", "owner", "target", "status", "value", "unit", "period", "definition",
     "act", "act-file", "act-sha256", "confirmation-request",
     "approval-system", "approval-approver", "approval-decision", "approval-time", "approval-reference",
 )
@@ -338,6 +340,25 @@ def record_problems(fields: dict, body: str, stem: str | None = None) -> list:
     return out
 
 
+def project_field_problems(fields: dict) -> list:
+    """What is wrong with owner, target or status on a record about to be saved.
+
+    On a change record they set its project's owner, target and status, so a new record carries them only
+    there, for a real project, with a real target date. Records already saved are not judged by this: a
+    record-1 reader keeps any extra header line, and only a change record's lines are given this meaning."""
+    out = []
+    kind, project = one(fields, "kind"), one(fields, "project")
+    present = [key for key in PROJECT_FIELDS if one(fields, key)]
+    if present and kind != "change":
+        out.extend(f"{key} sets a project's {key}, so it belongs only on a change record" for key in present)
+    elif present and project == NO_PROJECT:
+        out.append("owner, target and status are set for a project, so the record needs one")
+    target = one(fields, "target")
+    if target and target != NO_PROJECT and parse_date(target) is None:
+        out.append(f"target must be a real date like 2026-11-05, or none, not {target!r}")
+    return out
+
+
 def is_newer_format(fields) -> bool:
     fmt = one(fields or {}, "format")
     match = re.match(r"^record-(\d+)$", fmt)
@@ -566,7 +587,7 @@ def summary(item: dict, full: bool) -> dict:
         "subjects": fields.get("subject", []),
         "from": one(fields, "from"),
     }
-    for key in ("who", "words", "corrects", "due", "owed-by", "for", "state", "value", "unit", "period", "act", "act-file", "act-sha256", "confirmation-request", "approval-system", "approval-approver", "approval-decision", "approval-time", "approval-reference"):
+    for key in ("who", "words", "corrects", "due", "owed-by", "for", "state", "owner", "target", "status", "value", "unit", "period", "act", "act-file", "act-sha256", "confirmation-request", "approval-system", "approval-approver", "approval-decision", "approval-time", "approval-reference"):
         if one(fields, key):
             out[key] = one(fields, key)
     if fields.get("source"):
@@ -584,17 +605,76 @@ def summary(item: dict, full: bool) -> dict:
 
 # ---------------------------------------------------------------- projects
 
+MAX_FOLDERS_INSIDE_UNNAMED = 500  # folders looked at inside one folder with no id before the rest are named as not checked
+MAX_UNNAMED_FOLDERS = 5000        # folders with no id looked into in all, so every command stays quick
+MAX_PROJECT_DEPTH = 40            # folder levels below Projects/ ever looked at
+
+
 def scan_projects(pace: Path):
-    """Read project identity files two levels deep under Projects/."""
+    """Read project identity files under Projects/, at any depth.
+
+    A project's own projects are folders beside its Documents/. A folder with no Pace project.md that
+    holds no project is listed for the owner to ask about, unless it sits inside another such folder; a
+    project found behind folders with no id is still read, and reported because the folder around it has
+    no id. A folder that cannot be read is named, never taken as empty. Folders whose names start with a
+    dot are left out, and Documents/ is a project's own folder in any case of its name.
+    """
     base = pace / PROJECTS_DIR
     projects, issues, unlabelled = [], [], []
     if not base.is_dir():
         return projects, [{"type": "missing-folder", "message": f"{PROJECTS_DIR}/ was not found in this Pace folder."}], unlabelled
 
+    def not_read(folder: Path, error, what="listed") -> None:
+        where = rel(pace, folder)
+        issues.append({"type": "unreadable", "folder": where,
+                       "message": f"{where}/ could not be {what} ({error}), so a project inside it may be missing."})
+
+    def folder_key(path: Path, st):
+        """Where a folder really is, the same however it is reached, through a link or a junction."""
+        if st.st_ino:
+            return (st.st_dev, st.st_ino)
+        try:  # a drive that gives no file numbers
+            return str(path.resolve())
+        except OSError:
+            return str(path.absolute())
+
+    def subfolders(folder: Path):
+        """(folder, key) for each folder inside, without the project's Documents/ in any case of its name;
+        None when the folder cannot be listed. A link that leads nowhere is left out; a folder that cannot
+        be checked comes with no key."""
+        try:
+            with os.scandir(folder) as entries:
+                names = sorted(entry.name for entry in entries)
+        except OSError as error:
+            not_read(folder, error)
+            return None
+        found = []
+        for name in names:
+            if folder != base and name.casefold() == WORKING_DIR.casefold():
+                continue
+            path = folder / name
+            try:
+                st = os.stat(path)  # follows links and junctions, so a loop shows as a folder already above
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                not_read(path, error, "checked")
+                found.append((path, None))
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                found.append((path, folder_key(path, st)))
+        return found
+
+    def holds_project_file(folder: Path):
+        """True or False; None when the folder cannot be checked."""
+        try:
+            return (folder / PROJECT_FILE).exists()
+        except OSError as error:
+            not_read(folder, error, "checked")
+            return None
+
     def read_one(folder: Path, depth: int, parent_id):
         path = folder / PROJECT_FILE
-        if not path.is_file():
-            return None
         where = rel(pace, folder)
         try:
             fields, body, problems = parse(read_back(path))
@@ -614,7 +694,7 @@ def scan_projects(pace: Path):
         if depth == 1 and parent != NO_PROJECT:
             issues.append({"type": "parent-mismatch", "id": pid, "folder": where,
                            "message": f"Project {pid} sits at the top of {PROJECTS_DIR}/ but names parent {parent!r}."})
-        if depth == 2:
+        if depth > 1:
             if parent_id is None:
                 issues.append({"type": "parent-mismatch", "id": pid, "folder": where,
                                "message": f"Project {pid} sits inside {folder.parent.name}, which has no Pace project id."})
@@ -624,16 +704,80 @@ def scan_projects(pace: Path):
         projects.append(entry)
         return entry
 
-    for top in sorted(p for p in base.iterdir() if p.is_dir()):
-        first = read_one(top, 1, None)
-        found_child = False
-        for child in sorted(p for p in top.iterdir() if p.is_dir() and p.name != WORKING_DIR):
-            if read_one(child, 2, first["id"] if first else None):
-                found_child = True
-            elif not (child / PROJECT_FILE).exists():
-                unlabelled.append(rel(pace, child))
-        if not first and not found_child and not (top / PROJECT_FILE).exists():
-            unlabelled.append(rel(pace, top))
+    overall = {"looked": 0, "told": False}
+
+    def too_many(where: str, limit: int, scope: str) -> dict:
+        return {"type": "too-many-folders", "folder": where,
+                "message": f"{where}/ {scope} more than {limit} folders with no Pace project.md, so not all of them were "
+                           "checked for projects."}
+
+    def walk(folder: Path, depth: int, parent_id, above: frozenset, named: bool, budget) -> str:
+        """Read the projects inside folder. Returns "project" when a project is inside, "unknown" when something
+        could not be checked and no project was found, and "none" otherwise.
+
+        named is True for Projects/ and for a project: the folders with no id inside them that hold no project
+        are listed for the owner, as are those inside a folder with no id that holds a project. budget counts
+        the folders looked at inside one outermost folder with no id."""
+        if depth > MAX_PROJECT_DEPTH:
+            issues.append({"type": "too-deep", "folder": rel(pace, folder),
+                           "message": f"The folders inside {rel(pace, folder)}/ are more than {MAX_PROJECT_DEPTH} levels below "
+                                      f"{PROJECTS_DIR}/, so they were not checked."})
+            return "unknown"
+        children = subfolders(folder)
+        if children is None:
+            return "unknown"
+        found, unknown, quiet = False, False, []
+        for child, key in children:
+            if key is None:  # it could not be checked
+                unknown = True
+                continue
+            if key in above:  # reached again through a folder link or junction
+                issues.append({"type": "folder-loop", "folder": rel(pace, child),
+                               "message": f"{rel(pace, child)} leads back to a folder above it, so it was not read again."})
+                continue
+            if budget is not None:
+                budget["looked"] += 1
+                if budget["looked"] > MAX_FOLDERS_INSIDE_UNNAMED:
+                    if not budget["told"]:
+                        budget["told"] = True
+                        issues.append(too_many(budget["where"], MAX_FOLDERS_INSIDE_UNNAMED, "has no Pace project.md and holds"))
+                    unknown = True
+                    break
+            held = holds_project_file(child)
+            if held is None:
+                unknown = True
+                continue
+            if held:
+                entry = read_one(child, depth, parent_id)
+                walk(child, depth + 1, entry["id"] if entry else None, above | {key}, True, None)
+                found = True
+                continue
+            if child.name.startswith("."):  # a system folder such as .git, unless it holds a project
+                continue
+            overall["looked"] += 1
+            if overall["looked"] > MAX_UNNAMED_FOLDERS:
+                if not overall["told"]:
+                    overall["told"] = True
+                    issues.append(too_many(rel(pace, child), MAX_UNNAMED_FOLDERS, "and the folders after it come after"))
+                unknown = True
+                continue
+            inner = budget if budget is not None else {"looked": 0, "told": False, "where": rel(pace, child)}
+            outcome = walk(child, depth + 1, None, above | {key}, False, inner)
+            if outcome == "project":
+                found = True
+            elif outcome == "unknown":
+                unknown = True
+            else:
+                quiet.append(rel(pace, child))
+        if named or found:
+            unlabelled.extend(quiet)
+        return "project" if found else ("unknown" if unknown else "none")
+
+    try:
+        base_key = folder_key(base, os.stat(base))
+    except OSError:
+        base_key = str(base.absolute())
+    walk(base, 1, None, frozenset({base_key}), True, None)
     seen: dict = {}
     for entry in projects:
         seen.setdefault(entry["id"], []).append(entry["folder"])
@@ -681,6 +825,7 @@ def fields_from_args(args) -> tuple:
         "subject": args.subject, "from": args.origin, "who": args.who, "words": args.words,
         "source": args.source, "by": args.by, "captured": args.captured, "corrects": args.corrects,
         "due": args.due, "owed-by": args.owed_by, "for": args.owed_to, "state": args.state,
+        "owner": args.owner, "target": args.target, "status": args.status,
         "value": args.value, "unit": args.unit, "period": args.period, "definition": args.definition,
     }
     merged = {key: value for key, value in spec.items() if key not in ("body", "fields", "body_file")}
@@ -828,7 +973,7 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
         separate = find_duplicates(record_dir, fields, body, request)
         if separate:
             fields["separate-from"] = [" ".join(separate)]
-    problems = record_problems(fields, body, request)
+    problems = record_problems(fields, body, request) + project_field_problems(fields)
     if problems:
         return result("not-saved", "Not saved: " + "; ".join(problems) + ".", False, request=request, problems=problems)
     data = render(fields, body, RECORD_ORDER)
@@ -1437,6 +1582,34 @@ def cmd_approval_reference(args) -> tuple:
 # ---------------------------------------------------------------- project commands
 
 BAD_FOLDER = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# Projects can sit inside projects to any depth; what runs out is room for file paths. Excel cannot open
+# or save a file whose full path is longer than 218 characters (Microsoft KB 213983), and other Office and
+# Windows tools stop at about 260.
+EXCEL_PATH_LIMIT = 218
+ROOM_FOR_FILES = 100   # a folder in Documents/, Archive/ and a long dated file name
+TYPICAL_ROOT = 60      # a Pace folder in OneDrive, such as C:\Users\<name>\OneDrive - <Company>\PACE\
+
+
+def path_room(pace: Path, folder: Path) -> int:
+    """Characters left for folders and file names inside a project's Documents/ before Excel's limit.
+
+    The Pace folder's own place counts at no less than a typical OneDrive place, since the computer
+    the files are opened on may not be this one."""
+    try:
+        here = len(str(pace.resolve())) + 1
+    except OSError:
+        here = 0
+    return EXCEL_PATH_LIMIT - max(here, TYPICAL_ROOT) - len(rel(pace, folder / WORKING_DIR)) - 1
+
+
+def path_note(pace: Path, folder: Path) -> tuple:
+    room = path_room(pace, folder)
+    if room >= ROOM_FOR_FILES:
+        return room, ""
+    return room, (f" Long path: inside {WORKING_DIR}/ there is room for about {max(room, 0)} more characters of folder and "
+                  f"file names before Excel's {EXCEL_PATH_LIMIT}-character path limit, counting a Pace folder kept in OneDrive. "
+                  "A shorter folder name here, or on a project above it, leaves more room; a project folder can be renamed "
+                  "at any time, since its id does not change.")
 
 
 def cmd_project_new(args) -> tuple:
@@ -1444,7 +1617,8 @@ def cmd_project_new(args) -> tuple:
     pid, parent, name = args.id, args.parent or NO_PROJECT, (args.name or "").strip()
     if not valid_project_id(pid):
         return result("not-saved", f"Not saved: {pid!r} is not a usable project id (lowercase letters, digits and single hyphens, up to {MAX_ID} characters, not 'none').", False)
-    if not name or BAD_FOLDER.search(name) or name.endswith((".", " ")) or name in (WORKING_DIR,):
+    if (not name or BAD_FOLDER.search(name) or name.endswith((".", " ")) or name.startswith(".")
+            or name.casefold() == WORKING_DIR.casefold()):
         return result("not-saved", f"Not saved: {name!r} cannot be used as a folder name.", False)
     if not args.by:
         return result("not-saved", "Not saved: --by (who is creating the project) is needed.", False)
@@ -1473,8 +1647,6 @@ def cmd_project_new(args) -> tuple:
         parents = by_id.get(parent, [])
         if len(parents) != 1:
             return result("not-saved", f"Not saved: parent {parent} {'is not defined' if not parents else 'is defined more than once'} under {PROJECTS_DIR}/.", False)
-        if parents[0]["parent"] != NO_PROJECT or parents[0]["folder"].count("/") != 1:
-            return result("not-saved", f"Not saved: {parent} is itself inside another project; a project can only be one level below a parent.", False)
         folder = pace / parents[0]["folder"] / name
     where = rel(pace, folder)
     id_path = folder / PROJECT_FILE
@@ -1484,12 +1656,14 @@ def cmd_project_new(args) -> tuple:
         except OSError as error:
             return result("placed-not-confirmed", f"Not confirmed: {where}/{PROJECT_FILE} exists but could not be read ({error}).", False)
         if fields and one(fields, "format") == PROJECT_FORMAT and one(fields, "id") == pid and one(fields, "parent") == parent:
+            room, note = path_note(pace, folder)
             if not folders:
-                return result("already-saved", f"Already saved: {where} is project {pid}. Nothing new was written.", True, id=pid, folder=where)
+                return result("already-saved", f"Already saved: {where} is project {pid}. Nothing new was written.{note}", True,
+                              id=pid, folder=where, path_room=room)
             made, missed = make_project_folders(folder, folders)
             return result("already-saved", f"Already saved: {where} is project {pid}; its project file was not written again. "
-                          + folders_message(where, made, missed), not missed, id=pid, folder=where, folders=made,
-                          **({"folders_not_made": missed} if missed else {}))
+                          + folders_message(where, made, missed) + note, not missed, id=pid, folder=where, folders=made,
+                          path_room=room, **({"folders_not_made": missed} if missed else {}))
         return result("conflict", f"Conflict: {where} already has a different project identity. Nothing was overwritten.", False, folder=where)
     if pid in by_id:
         used = ", ".join(entry["folder"] for entry in by_id[pid])
@@ -1523,12 +1697,13 @@ def cmd_project_new(args) -> tuple:
     if clash:
         return result("conflict", f"Created {where}, but project id {pid} is now also used by {', '.join(clash)}. Ask the owner which to keep.",
                       False, id=pid, folder=where, placed=True)
+    room, note = path_note(pace, folder)
     if not folders:
-        return result("saved", f"Saved and read back: project {pid} in {where} (with {WORKING_DIR}/). {CLOUD_NOTE}",
-                      True, id=pid, folder=where, parent=parent)
+        return result("saved", f"Saved and read back: project {pid} in {where} (with {WORKING_DIR}/). {CLOUD_NOTE}{note}",
+                      True, id=pid, folder=where, parent=parent, path_room=room)
     made, missed = make_project_folders(folder, folders)
     return result("saved", f"Saved and read back: project {pid} in {where} (with {WORKING_DIR}/). " + folders_message(where, made, missed)
-                  + f" {CLOUD_NOTE}", True, id=pid, folder=where, parent=parent, folders=made,
+                  + f" {CLOUD_NOTE}{note}", True, id=pid, folder=where, parent=parent, folders=made, path_room=room,
                   **({"folders_not_made": missed} if missed else {}))
 
 
@@ -1596,6 +1771,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--owed-by")
     p.add_argument("--for", dest="owed_to")
     p.add_argument("--state", choices=ACTION_STATES)
+    p.add_argument("--owner", help="on a change: who leads the project now (none clears it)")
+    p.add_argument("--target", help="on a change: the project's target date, like 2026-11-05 (none clears it)")
+    p.add_argument("--status", help="on a change: a short status in words (none clears it)")
     p.add_argument("--value")
     p.add_argument("--unit")
     p.add_argument("--period")

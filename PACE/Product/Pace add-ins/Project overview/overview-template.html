@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <!--
-  Pace by Simply Better Reports: Project overview page template.
+  Pace by SBR: Project overview page template.
 
   The Project overview add-in fills in a copy of this file to make a dated
-  page in Views/, such as Views/2026-10-23-project-overview.html. Any
-  assistant can fill it in by hand: no tool is needed. The page is a
-  snapshot of the records, never a record and never an authority.
+  page in Views/, such as Views/2026-10-23-project-overview.html. An
+  assistant that can run Python uses Product/Tools/pace_overview.py, which
+  fills it in from the records. Any other assistant can fill it in by hand
+  with these notes. The page is a snapshot of the records, never a record
+  and never an authority.
 
-  How to fill it in
+  How to fill it in by hand
   1. Work on a copy. Never change this template.
   2. Keep the one view you are making, from its "start" note to its "end"
      note, and delete the other two views with their notes.
@@ -16,9 +18,14 @@
      when it does not apply. When a list has nothing in it, replace the
      whole list with <p class="none">None.</p>
   4. Use the record's own words and states. Write "Not recorded" for
-     anything the record does not hold; never guess.
+     anything the record does not hold, such as "state not recorded" for
+     an open item with no state; never guess. Give an open item
+     the class "item late" when it is overdue and "item today" when it is
+     due today. When it has no due date, write "no due date" in place of
+     "due {{date}}" and leave out its "when" part.
   5. Delete this note and every other note except the view's "start" and
-     "end" notes. Keep the style block exactly as it is.
+     "end" notes. Keep the style block and the SBR wordmark exactly as
+     they are.
   6. Check before saving: no {{ is left, only one view is left, and the
      As at, Searched and Could not read lines are filled in.
 
@@ -43,33 +50,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>{{title, such as Project overview, 23 Oct 2026}} - Pace by Simply Better Reports</title>
+<title>{{title, such as Project overview, 23 Oct 2026}} - Pace by SBR</title>
 <style>
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --panel: #f5f7f9;
-  --text: #0f172a;
-  --muted: #4b5a6c;
-  --rule: #d8dee5;
-  --accent: #175873;
-  --overdue: #a8261b;
-  --two-ways: #8a5a00;
-  --waiting: #2f6f97;
-  --soon: #175873;
+  --bg: #faf6f0;
+  --panel: #f2ebe2;
+  --text: #35293d;
+  --muted: #5e5068;
+  --rule: #e9e0d8;
+  --accent: #4f5c10;
+  --mark: #dbf36b;
+  --on-mark: #35293d;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f172a;
-    --panel: #172238;
-    --text: #e3e8ef;
-    --muted: #a4b1c1;
-    --rule: #2e3c55;
-    --accent: #8cc3d6;
-    --overdue: #f2a196;
-    --two-ways: #efc677;
-    --waiting: #9cc5e3;
-    --soon: #8cc3d6;
+    --bg: #35293d;
+    --panel: #3f3248;
+    --text: #faf6f0;
+    --muted: #c9bad6;
+    --rule: #5a4a66;
+    --accent: #dbf36b;
+    --mark: #dbf36b;
+    --on-mark: #35293d;
   }
 }
 * { box-sizing: border-box; }
@@ -78,21 +81,31 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 Aptos, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font: 15px/1.5 "Instrument Sans", Arial, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 .page { max-width: 72rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--text);
+}
+.wordmark { display: block; width: 7rem; height: auto; color: var(--text); }
 .product {
   margin: 0;
-  color: var(--accent);
-  font-size: 0.78rem;
+  color: var(--muted);
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-h1 { margin: 0.2rem 0 1rem; font-size: 1.75rem; line-height: 1.2; }
-h2 { margin: 0 0 0.2rem; font-size: 1.2rem; line-height: 1.3; color: var(--accent); }
-h3 { margin: 0 0 0.2rem; font-size: 1.05rem; line-height: 1.3; }
+h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; }
+h1 { margin: 1.25rem 0 1rem; font-size: 2rem; line-height: 1.15; }
+h2 { margin: 0 0 0.4rem; font-size: 1.3rem; line-height: 1.25; }
+h3 { margin: 0; font-size: 1rem; line-height: 1.3; }
 p { margin: 0; }
 .facts {
   display: grid;
@@ -101,109 +114,134 @@ p { margin: 0; }
   margin: 0;
   padding: 0.85rem 1rem;
   background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 .facts dt { font-weight: 600; color: var(--muted); }
-.facts dd { margin: 0; }
-.glance { margin-top: 0.85rem; font-weight: 600; }
-.view { margin-top: 2rem; }
-.group { margin-top: 2rem; }
-.group > .purpose { color: var(--muted); margin-bottom: 0.75rem; }
-.cards {
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.view { margin-top: 1.75rem; }
+.view > .facts { margin-bottom: 1rem; }
+.tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
-  gap: 1rem;
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.card {
-  padding: 1rem;
-  background: var(--bg);
-  border: 1px solid var(--rule);
-  border-top: 3px solid var(--accent);
-  border-radius: 6px;
+.tile { padding: 0.7rem 0.85rem; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); }
+.count { display: block; color: var(--text); font-size: 1.9rem; font-weight: 500; line-height: 1.15; }
+.tile.key .count { display: table; padding: 0 0.2em; background: var(--mark); color: var(--on-mark); }
+.part { margin-top: 2.25rem; }
+.lede { margin-bottom: 0.75rem; color: var(--muted); }
+.items { margin: 0; padding: 0; list-style: none; }
+.items > li { margin-bottom: 0.5rem; }
+.item { padding: 0.45rem 0 0.45rem 0.8rem; border-left: 3px solid var(--rule); }
+.item.late { border-left-color: var(--accent); }
+.item.late .when { color: var(--accent); font-weight: 700; }
+.item.today .when { padding: 0 0.2em; background: var(--mark); color: var(--on-mark); font-weight: 700; }
+.what { overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 0.9rem; }
+.where { margin-bottom: 0.1rem; color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
+.none { color: var(--muted); font-style: italic; }
+.quiet { margin-top: 0.75rem; color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+.projects { width: 100%; border-collapse: collapse; }
+.projects th, .projects td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
 }
-.card > .purpose { color: var(--muted); }
-.card-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.1rem 1rem;
-  margin: 0.6rem 0 0;
-  font-size: 0.9rem;
-}
-.card-facts dt { color: var(--muted); }
-.card-facts dd { margin: 0; }
-.line { margin-top: 0.85rem; padding-left: 0.7rem; border-left: 3px solid var(--rule); }
-.line.overdue { border-left-color: var(--overdue); }
-.line.two-ways { border-left-color: var(--two-ways); }
-.line.waiting { border-left-color: var(--waiting); }
-.line.soon { border-left-color: var(--soon); }
-.label {
-  margin-bottom: 0.2rem;
+.projects thead th {
   color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--text);
+}
+.projects .num { text-align: right; }
+.projects .late { color: var(--accent); font-weight: 700; }
+.projects tbody th { font-weight: 500; }
+.parent { color: var(--muted); font-weight: 400; }
+.status { display: block; margin-top: 0.1rem; color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+.project {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--text);
+  border-radius: 4px;
+}
+.project > summary { cursor: pointer; font-size: 1.1rem; font-weight: 500; }
+.counts { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.purpose { margin: 0.35rem 0 0.5rem; color: var(--muted); }
+.group {
+  margin: 1rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.overdue > .label, .late { color: var(--overdue); }
-.two-ways > .label { color: var(--two-ways); }
-.waiting > .label { color: var(--waiting); }
-.soon > .label { color: var(--soon); }
-.late { font-weight: 600; }
-.items { margin: 0; padding: 0; list-style: none; }
-.items > li { margin-bottom: 0.6rem; }
-.items > li:last-child { margin-bottom: 0; }
 .accounts { margin: 0.35rem 0 0; padding-left: 1.3rem; }
-.accounts > li { margin-bottom: 0.4rem; }
-.meta { color: var(--muted); font-size: 0.875rem; }
-.ref {
-  color: var(--muted);
-  font: 0.75rem/1.4 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
-  overflow-wrap: anywhere;
+.two-ways > h2 { color: var(--accent); }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+  align-items: start;
 }
-.none { color: var(--muted); font-style: italic; }
-.part { margin-top: 1.5rem; }
-.part > h3 { padding-bottom: 0.25rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--rule); }
-.part.two-ways > h3 { color: var(--two-ways); }
+.card { padding: 0.75rem 1rem 1rem; border: 1px solid var(--rule); border-top: 3px solid var(--text); border-radius: 4px; }
 .files { margin: 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
-.parent { display: block; color: var(--muted); font-size: 0.9rem; font-weight: 400; }
 .foot {
-  margin-top: 2.5rem;
+  margin-top: 3rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--rule);
+  border-top: 2px solid var(--text);
   color: var(--muted);
   font-size: 0.85rem;
 }
 .foot p + p { margin-top: 0.4rem; }
 @media (max-width: 40rem) {
-  body { font-size: 15px; }
   .page { padding: 1.25rem 0.9rem 2rem; }
-  h1 { font-size: 1.4rem; }
+  h1 { font-size: 1.6rem; }
   .facts { grid-template-columns: 1fr; }
   .facts dd { margin-bottom: 0.35rem; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .count { font-size: 1.5rem; }
+  .table-wrap { overflow: visible; }
+  .projects thead { display: none; }
+  .projects, .projects tbody, .projects tr, .projects tbody th { display: block; }
+  .projects tr { padding: 0.55rem 0; border-bottom: 1px solid var(--rule); }
+  .projects tbody th, .projects td { padding: 0; border: 0; }
+  .projects td { display: inline-block; margin: 0.2rem 1rem 0 0; }
+  .projects td::before { color: var(--muted); font-weight: 400; }
+  .projects td.owner::before { content: "Owner "; }
+  .projects td.target::before { content: "Target "; }
+  .projects td.open::before { content: "Open "; }
+  .projects td.overdue::before { content: "Overdue "; }
+  .projects td.due::before { content: "Earliest due "; }
+  .projects td.last::before { content: "Last recorded "; }
 }
 @media print {
   :root {
     color-scheme: light;
     --bg: #ffffff;
     --panel: #ffffff;
-    --text: #000000;
-    --muted: #333333;
-    --rule: #999999;
-    --accent: #175873;
-    --overdue: #8f1d14;
-    --two-ways: #6b4500;
-    --waiting: #175873;
-    --soon: #175873;
+    --text: #35293d;
+    --muted: #4b3f55;
+    --rule: #b5a79a;
+    --accent: #4f5c10;
+    --mark: #ffffff;
+    --on-mark: #35293d;
   }
   @page { margin: 15mm; }
   body { font-size: 10.5pt; }
   .page { max-width: none; padding: 0; }
-  .cards { display: block; }
-  .card { margin-bottom: 4mm; }
-  .facts, .card-facts, .line, .items > li { break-inside: avoid; }
-  h1, h2, h3, .label { break-after: avoid; }
+  .facts { border: 1px solid var(--rule); }
+  .tile.key .count, .item.today .when { text-decoration: underline; }
+  .table-wrap { overflow: visible; }
+  .item, .tile, .projects tr, .facts { break-inside: avoid; }
+  h1, h2, h3, .group, summary { break-after: avoid; }
 }
 </style>
 </head>
@@ -211,211 +249,274 @@ p { margin: 0; }
 <main class="page">
 
 <header>
-<p class="product">Pace by Simply Better Reports</p>
-<h1>{{heading: Project overview, or Work by person}}</h1>
+<div class="brand">
+<p class="product">Pace by SBR</p>
+<svg class="wordmark" viewBox="0 0 714.2091 399.0466" role="img" aria-label="SBR"><path d="M641 -18Q549 -18 462.0 6.0Q375 30 275 81L206 0H144L105 507L188 520Q252 297 357.5 197.0Q463 97 638 97Q763 97 837.5 157.0Q912 217 912 322Q912 385 859.5 439.5Q807 494 679 556L518 636Q322 733 230.0 851.0Q138 969 138 1126Q138 1247 205.0 1341.5Q272 1436 386.5 1490.0Q501 1544 646 1544Q849 1544 994 1421L1041 1526H1107L1126 1088H1039Q990 1257 895.5 1342.0Q801 1427 656 1427Q554 1427 497.0 1377.0Q440 1327 440 1239Q440 1171 491.0 1117.5Q542 1064 668 1000L826 919Q1014 823 1096.5 708.0Q1179 593 1179 432Q1179 304 1108.0 202.0Q1037 100 915.0 41.0Q793 -18 641 -18Z" transform="translate(41.74993906897392,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H750Q900 1523 999.5 1503.5Q1099 1484 1166 1443Q1243 1394 1285.5 1318.0Q1328 1242 1328 1154Q1328 1034 1232.0 950.5Q1136 867 960 836V828Q1093 815 1193.0 758.0Q1293 701 1348.5 610.5Q1404 520 1404 404Q1404 313 1364.5 234.0Q1325 155 1257 104Q1181 48 1073.0 24.0Q965 0 786 0ZM744 105Q891 105 961.5 181.5Q1032 258 1032 421Q1032 595 942.0 676.5Q852 758 664 758H592V223Q592 153 624.5 129.0Q657 105 744 105ZM592 865H614Q649 865 674.5 866.5Q700 868 719 871Q838 883 902.0 953.5Q966 1024 966 1146Q966 1216 944.5 1267.0Q923 1318 883 1350Q840 1385 776.0 1400.5Q712 1416 628 1416H592Z" transform="translate(224.25054837923471,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H797Q953 1523 1072.0 1473.5Q1191 1424 1258.0 1327.5Q1325 1231 1325 1090Q1325 946 1252.5 849.0Q1180 752 1049 705L1398 112L1515 73V0H1071L672 663H592V117L818 73V0ZM592 770H620Q727 770 793.0 799.0Q859 828 900 877Q944 926 962.0 986.5Q980 1047 980 1110Q980 1217 932.0 1288.5Q884 1360 807 1391Q773 1405 733.5 1410.5Q694 1416 633 1416H592Z" transform="translate(435.55934681940045,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><rect x="57.10455764075067" y="310.64879356568366" width="600.0" height="7.3093833780160855" fill="currentColor"/><rect x="57.10455764075067" y="330.5211796246649" width="600.0" height="11.420911528150135" fill="currentColor"/></svg>
+</div>
+<h1>{{heading: Project overview, the project's name, or Work by person}}</h1>
 <dl class="facts">
 <dt>As at</dt>
 <dd>{{date, time and time zone, such as Friday 23 October 2026, 9:00 am NZDT}}</dd>
 <dt>Asked</dt>
 <dd>{{the question and its scope, such as Where does every project stand? Every project in Projects/.}}</dd>
 <dt>Searched</dt>
-<dd>{{what was actually searched, such as All 11 records in Record/, read in full, and the 4 projects in Projects/.}}</dd>
+<dd>{{what was actually searched, such as All 11 record files in Record/, each opened, with corrections and withdrawals followed to the current account; and the 4 projects in Projects/.}}</dd>
 <dt>Could not read</dt>
 <dd>{{anything that could not be opened or read, starting with Partial: when there is any; otherwise Nothing: every file listed was opened.}}</dd>
 </dl>
-<p class="glance">{{one line at a glance, such as 3 projects: 1 item recorded two ways, 1 overdue, 1 waiting on you and 1 due soon.}}</p>
 </header>
 
 <!-- start: every project view -->
 <section class="view">
-<!-- repeat: one group per parent project, most pressing first. Projects with no parent go last, in a group headed Projects on their own, with no purpose line. -->
-<section class="group">
-<h2>{{parent project's name}}</h2>
-<p class="purpose">{{parent's purpose, or Purpose not recorded}}</p>
-<div class="cards">
-<!-- repeat: one card per project in this group, most pressing first; finished and cancelled last -->
-<article class="card">
-<h3>{{project's name}}</h3>
-<p class="purpose">{{purpose, or Purpose not recorded}}</p>
-<dl class="card-facts">
-<dt>Owned by</dt>
-<dd>{{name, or Not recorded}}</dd>
-<dt>Due</dt>
-<dd>{{date, such as 27 Nov 2026, or Not recorded}}</dd>
-<!-- only when the record gives the project a state, such as finished or cancelled -->
-<dt>State</dt>
-<dd>{{state as recorded}}</dd>
-</dl>
-<!-- only when the owner, due date or state came from a record -->
-<p class="ref">{{Owner and due date: record request id}}</p>
+<ul class="tiles">
+<!-- Give the class "tile key" to the overdue tile when anything is overdue; otherwise every tile is plain "tile". -->
+<li class="tile key"><span class="count">{{number}}</span> overdue</li>
+<li class="tile"><span class="count">{{number}}</span> due today</li>
+<li class="tile"><span class="count">{{number}}</span> due in the next 7 days</li>
+<li class="tile"><span class="count">{{number}}</span> waiting on you</li>
+<li class="tile"><span class="count">{{number}}</span> waiting on others</li>
+<li class="tile"><span class="count">{{number}}</span> with no due date</li>
+</ul>
 <!-- only when an item is recorded two ways -->
-<div class="line two-ways">
-<p class="label">Recorded two ways</p>
+<section class="part two-ways">
+<h2>Recorded two ways</h2>
+<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
 <ul class="items">
 <!-- repeat: one per item with two accounts -->
 <li>
-<p><strong>{{subject}}</strong> Two accounts; which stands?</p>
+<p><strong>{{subject}}</strong> <span class="parent">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></p>
 <ol class="accounts">
 <!-- repeat: one per account, in the order recorded -->
 <li class="item">
 <p class="what">{{this account's own text}}</p>
-<p class="meta">{{From whom, such as From Ana Ruiz or From you}} &middot; due {{date}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
 </li>
 </ol>
 </li>
 </ul>
-</div>
-<div class="line overdue">
-<p class="label">Overdue</p>
+</section>
+<section class="part">
+<h2>Needs attention</h2>
+<p class="lede">Overdue, due today and due in the next 7 days, across every project.</p>
 <ul class="items">
-<!-- repeat: one per overdue item, oldest due date first -->
-<li class="item">
+<!-- repeat: one per item; overdue first, the longest late first, then due today, then by due date. The class is "item late" when overdue, "item today" when due today, otherwise "item". -->
+<li class="item late">
+<p class="where">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</p>
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by name, or Owed by you}} &middot; due {{date}} &middot; <span class="late">{{how late, such as 2 days late}}</span> &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date, such as 27 Nov 2026}} &middot; <span class="when">{{how late or how soon, such as 2 days late, today or in 3 days}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
+</section>
+<section class="part">
+<h2>Projects</h2>
+<p class="lede">Each project with open work, a target or a status, grouped under its parent, the most pressing first.</p>
+<div class="table-wrap">
+<table class="projects">
+<thead>
+<tr><th>Project</th><th>Owner</th><th>Target</th><th class="num">Open</th><th class="num">Overdue</th><th>Earliest due</th><th>Last recorded</th></tr>
+</thead>
+<tbody>
+<!-- repeat: one row per project with open work, a target or a status. Groups run most pressing first (the most overdue, then the earliest due date, then the most open work), judged by the most pressing work anywhere in the group; in a group, each project comes before the projects inside it, and projects side by side run most pressing first in the same way. Leave out the Owner column, its heading and its cells, when no project in the table has an owner; the same for Target. Owner, target and status come from the project's change records, as the add-in describes. The overdue cell's class is "num overdue late" when the number is more than 0, otherwise "num overdue". Earliest due is the earliest due date of the project's open work, overdue or not; its cell's class is "due late" when that date has passed, otherwise "due". The target cell's class is "target late" when the target has passed, otherwise "target". -->
+<tr><th><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, such as Kowhai Books &rsaquo;, or leave this span out}}</span> {{project's name}}<span class="status">{{only when it has a status: a space, then the status in its own words &middot; its date, or Recorded two ways; otherwise leave this span out}}</span></th><td class="owner">{{who leads it, You for the owner, Recorded two ways, or Not recorded}}</td><td class="target late">{{target date and how late or how soon, such as 27 Nov 2026, in 28 days, Recorded two ways, or Not recorded}}</td><td class="num open">{{open}}</td><td class="num overdue late">{{overdue}}</td><td class="due late">{{earliest due date and how late or how soon, such as 8 Oct 2026, 16 days late, or No due date}}</td><td class="last">{{date of the project's newest record and how long ago}}</td></tr>
+</tbody>
+</table>
 </div>
-<div class="line soon">
-<p class="label">Due soon</p>
+<!-- only when some projects have no open work, target or status, in them or in any project inside them -->
+<p class="quiet">No open work recorded: {{those projects' names}}.</p>
+<!-- only when Projects/ holds folders with no Pace project.md -->
+<p class="quiet">Folders with no Pace project.md: {{their places}}. Ask the owner what each one is.</p>
+</section>
+<section class="part">
+<h2>Open work by project</h2>
+<!-- repeat: one per project with open work, in the same order as the table -->
+<details class="project" open>
+<summary><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, or leave this span out}}</span> {{project's name}} <span class="counts">{{counts, such as 3 open &middot; 1 overdue}}</span></summary>
+<p class="purpose">{{purpose, or Purpose not recorded}}</p>
+<!-- only when the owner owes something here -->
+<h3 class="group">Waiting on you</h3>
 <ul class="items">
-<!-- repeat: one per item due today or in the next three weeks, earliest first -->
+<!-- repeat: one per item the owner owes; overdue first, then due today, then by due date, then those with no due date, in the order first recorded -->
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by name, Owed by you, or Owed by: not recorded}} &middot; due {{date}} &middot; {{how soon, such as in 6 days, or today}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">Owed by you &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
-</div>
-<div class="line waiting">
-<p class="label">Waiting on you</p>
+<!-- only when someone else owes something here -->
+<h3 class="group">Waiting on others</h3>
 <ul class="items">
-<!-- repeat: one per item someone is waiting on the owner for, earliest due first -->
+<!-- repeat: one per item someone else owes, in the same order -->
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{For whom, such as For Ana Ruiz}} &middot; due {{date}} &middot; {{how soon, such as in 4 days, or today}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">Owed by {{name}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
-</div>
-</article>
-</div>
+<!-- only when some open work here names no one -->
+<h3 class="group">No person named</h3>
+<ul class="items">
+<!-- repeat: one per item that names no one, in the same order -->
+<li class="item">
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
+</li>
+</ul>
+</details>
 </section>
 </section>
 <!-- end: every project view -->
 
 <!-- start: one project view -->
 <section class="view">
-<h2>{{project's name}}<span class="parent">{{In parent project's name, or leave this span out}}</span></h2>
-<dl class="card-facts">
+<dl class="facts">
 <dt>Purpose</dt>
 <dd>{{purpose, or Purpose not recorded}}</dd>
-<dt>State</dt>
-<dd>{{state as recorded, or Not recorded}}</dd>
-<dt>Owned by</dt>
-<dd>{{name, or Not recorded}}</dd>
-<dt>Due</dt>
-<dd>{{date, or Not recorded}}</dd>
+<dt>Owner</dt>
+<dd>{{who leads it, You for the owner, Recorded two ways, or Not recorded}}</dd>
+<dt>Target</dt>
+<dd>{{target date and how late or how soon, Recorded two ways, or Not recorded}}</dd>
+<dt>Status</dt>
+<dd>{{the status in its own words &middot; its date, Recorded two ways, or Not recorded}}</dd>
+<dt>Part of</dt>
+<dd>{{the projects above it, such as Kowhai Books, or Kowhai Books &rsaquo; Budget 2027 further down, or Not part of another project}}</dd>
+<dt>Projects inside it</dt>
+<dd>{{every project inside it at any depth, each after the names of any between, such as Budget 2027, Budget 2027 &rsaquo; Board pack, or None}}</dd>
+<dt>Last recorded</dt>
+<dd>{{date of the newest record for it or a project inside it, and how long ago}}</dd>
 </dl>
-<!-- only when the owner, due date or state came from a record -->
-<p class="ref">{{Owner and due date: record request id}}</p>
-<!-- only when an item is recorded two ways -->
+<ul class="tiles">
+<!-- the same six tiles as the every project view, counting this project and the projects inside it -->
+<li class="tile key"><span class="count">{{number}}</span> overdue</li>
+<li class="tile"><span class="count">{{number}}</span> due today</li>
+<li class="tile"><span class="count">{{number}}</span> due in the next 7 days</li>
+<li class="tile"><span class="count">{{number}}</span> waiting on you</li>
+<li class="tile"><span class="count">{{number}}</span> waiting on others</li>
+<li class="tile"><span class="count">{{number}}</span> with no due date</li>
+</ul>
+<!-- only when an item is recorded two ways: the same block as the every project view -->
 <section class="part two-ways">
-<h3>Recorded two ways</h3>
+<h2>Recorded two ways</h2>
+<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
 <ul class="items">
-<!-- repeat: one per item with two accounts -->
 <li>
-<p><strong>{{subject}}</strong> Two accounts; which stands?</p>
+<p><strong>{{subject}}</strong> <span class="parent">{{project}}</span></p>
 <ol class="accounts">
-<!-- repeat: one per account, in the order recorded -->
 <li class="item">
 <p class="what">{{this account's own text}}</p>
-<p class="meta">{{From whom}} &middot; due {{date}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
 </li>
 </ol>
 </li>
 </ul>
 </section>
 <section class="part">
-<h3>Decisions waiting on you</h3>
+<h2>Needs attention</h2>
+<p class="lede">Overdue, due today and due in the next 7 days, in this project and the projects inside it.</p>
 <ul class="items">
-<!-- repeat: one per decision waiting on the owner -->
+<!-- repeat: the same items, in the same order, as the every project view's Needs attention, for this project and the projects inside it -->
+<li class="item late">
+<p class="where">{{project}}</p>
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
+</li>
+</ul>
+</section>
+<!-- only when a project inside it has open work, a target or a status -->
+<section class="part">
+<h2>Projects</h2>
+<p class="lede">This project and the projects inside it that have open work, a target or a status, the most pressing first.</p>
+<div class="table-wrap">
+<table class="projects">
+<thead>
+<tr><th>Project</th><th>Owner</th><th>Target</th><th class="num">Open</th><th class="num">Overdue</th><th>Earliest due</th><th>Last recorded</th></tr>
+</thead>
+<tbody>
+<!-- repeat: the same rows as the every project view's table, for this project and the projects inside it, in the same order -->
+<tr><th><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, or leave this span out}}</span> {{project's name}}<span class="status">{{only when it has a status: a space, then the status &middot; its date, or Recorded two ways; otherwise leave this span out}}</span></th><td class="owner">{{who leads it, Recorded two ways, or Not recorded}}</td><td class="target late">{{target date and how late or how soon, Recorded two ways, or Not recorded}}</td><td class="num open">{{open}}</td><td class="num overdue late">{{overdue}}</td><td class="due late">{{earliest due date and how late or how soon, or No due date}}</td><td class="last">{{date of the project's newest record and how long ago}}</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="part">
+<h2>Open work</h2>
+<!-- the same three groups and order as a project in the every project view; when a project inside it holds the item, in any group, name that project in a "where" line above the subject -->
+<h3 class="group">Waiting on you</h3>
+<ul class="items">
+<li class="item">
+<!-- only when a project inside it holds the item -->
+<p class="where">{{project inside it, such as Kowhai Books &rsaquo; Budget 2027}}</p>
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">Owed by you &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
+</li>
+</ul>
+<h3 class="group">Waiting on others</h3>
+<ul class="items">
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{For whom, if recorded}} &middot; due {{date, or Date not recorded}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">Owed by {{name}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
+</li>
+</ul>
+<h3 class="group">No person named</h3>
+<ul class="items">
+<li class="item">
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
 </section>
 <section class="part">
-<h3>Open tasks</h3>
+<h2>Decided in the last three weeks</h2>
 <ul class="items">
-<!-- repeat: one per open task, late ones first, then by date -->
+<!-- repeat: one per decision record, newest first -->
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by name, or Owed by you}} &middot; due {{date}} &middot; {{how late or how soon}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{date recorded}} &middot; {{From you, or from whom}}</p>
 </li>
 </ul>
 </section>
 <section class="part">
-<h3>Related work</h3>
+<h2>Changed in the last three weeks</h2>
 <ul class="items">
-<!-- repeat: one per related item; related work is never called blocking -->
+<!-- repeat: one per change record, such as a new owner, scope or date for the project, newest first -->
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{project it belongs to}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{date recorded}} &middot; {{From you, or from whom}}</p>
 </li>
 </ul>
 </section>
 <section class="part">
-<h3>Notes</h3>
+<h2>Done in the last three weeks</h2>
+<ul class="items">
+<!-- repeat: one per item whose current account is done, newest first -->
+<li class="item">
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">{{date recorded}} &middot; {{state as recorded}}</p>
+</li>
+</ul>
+</section>
+<section class="part">
+<h2>Cancelled in the last three weeks</h2>
+<ul class="items">
+<!-- repeat: one per item whose current account is cancelled, newest first -->
+<li class="item">
+<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
+<p class="meta">{{date recorded}} &middot; {{state as recorded}}</p>
+</li>
+</ul>
+</section>
+<section class="part">
+<h2>Notes from the last three weeks</h2>
 <ul class="items">
 <!-- repeat: one per note, newest first -->
 <li class="item">
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
 <p class="meta">{{date recorded}}</p>
-<p class="ref">Record {{request id}}</p>
 </li>
 </ul>
 </section>
 <section class="part">
-<h3>Projects inside it</h3>
+<h2>Documents and repository references</h2>
 <ul class="files">
-<!-- repeat: one per project inside this one -->
-<li>{{project's name}}</li>
-</ul>
-</section>
-<section class="part">
-<h3>Documents and repository references</h3>
-<ul class="files">
-<!-- repeat: one per working file or repository reference, by its place in the Pace folder -->
-<li>{{path, such as Projects/Kowhai Books/Budget 2027/Documents/model.xlsx}}</li>
-</ul>
-</section>
-<section class="part">
-<h3>Done in the last three weeks</h3>
-<ul class="items">
-<!-- repeat: one per item done in the last three weeks, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date done}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
-</li>
-</ul>
-</section>
-<section class="part">
-<h3>Cancelled</h3>
-<ul class="items">
-<!-- repeat: one per cancelled item -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
-</li>
+<!-- repeat: one per folder or file at the top of the project's Documents/, and one per repository reference, by its place in the Pace folder -->
+<li>{{place, such as Projects/Kowhai Books/Budget 2027/Documents/Deliverables}}</li>
 </ul>
 </section>
 </section>
@@ -423,42 +524,53 @@ p { margin: 0; }
 
 <!-- start: by person view -->
 <section class="view">
+<!-- only when an item is recorded two ways: the same block as the every project view -->
+<section class="part two-ways">
+<h2>Recorded two ways</h2>
+<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
+<ul class="items">
+<li>
+<p><strong>{{subject}}</strong> <span class="parent">{{project}}</span></p>
+<ol class="accounts">
+<li class="item">
+<p class="what">{{this account's own text}}</p>
+<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
+</li>
+</ol>
+</li>
+</ul>
+</section>
 <div class="cards">
-<!-- repeat: one card per person, by name -->
+<!-- repeat: one card per person, you first, then by name -->
 <article class="card">
-<h3>{{person's name}}</h3>
-<div class="line">
-<p class="label">Will provide</p>
+<h2>{{person's name, or You}}</h2>
+<h3 class="group">Owes</h3>
 <ul class="items">
-<!-- repeat: one per item this person owes, late ones first, then by date -->
+<!-- repeat: one per open item this person owes; overdue first, then by due date, then those with no due date -->
 <li class="item">
+<p class="where">{{project}}</p>
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{project}} &middot; due {{date}} &middot; {{how late or how soon}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{For whom, then &middot;, such as For Ana Ruiz &middot;, or leave it out when the record names no one}} due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
-</div>
-<div class="line">
-<p class="label">Waiting for</p>
+<h3 class="group">Waiting for</h3>
 <ul class="items">
-<!-- repeat: one per item this person is waiting for, late ones first, then by date -->
+<!-- repeat: one per open item someone owes this person, in the same order -->
 <li class="item">
+<p class="where">{{project}}</p>
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{project}} &middot; {{Owed by name, or Owed by you}} &middot; due {{date}} &middot; {{how late or how soon}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">{{Owed by name, or Owed by you}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
-</div>
 </article>
-<!-- only when some open work names no person -->
+<!-- only when some open work names no one who owes it -->
 <article class="card">
-<h3>No person named</h3>
+<h2>No person named</h2>
 <ul class="items">
-<!-- repeat: one per open item with no person named -->
 <li class="item">
+<p class="where">{{project}}</p>
 <p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{project}} &middot; due {{date, or Date not recorded}} &middot; {{state as recorded}}</p>
-<p class="ref">Record {{request id}}</p>
+<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
 </li>
 </ul>
 </article>
@@ -468,7 +580,7 @@ p { margin: 0; }
 
 <footer class="foot">
 <p>A dated snapshot made from the records. It is not a record, it changes nothing and it is never edited: the records in Record/ stand. For a newer picture, make a new page; to put something right, save a correction in Record/.</p>
-<p>Pace by Simply Better Reports</p>
+<p>Pace by SBR</p>
 </footer>
 
 </main>

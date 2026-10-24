@@ -1,8 +1,10 @@
 """Project overview page checks, against the shipped template and the invented example only.
 
-The template beside the Project overview add-in is the one source of the page.
-These checks read the template and the invented example page filled in from
-it. They never open an owner's folder.
+The template beside the Project overview add-in is the one source of the page:
+the overview tool takes its style, wordmark and footer from it, and an assistant
+without Python fills it in by hand. These checks read the template, the add-in,
+and the invented example page the tool made from the example folder. They
+never open an owner's folder.
 """
 
 from datetime import date
@@ -12,36 +14,57 @@ from pathlib import Path
 import html
 import importlib.util
 import re
+import shutil
+import sys
+import tempfile
 import unittest
 
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]
 ADD_IN_FOLDER = Path("Product/Pace add-ins/Project overview")
 TEMPLATE = ROOT / "PACE" / ADD_IN_FOLDER / "overview-template.html"
 ADD_IN = ROOT / "PACE" / ADD_IN_FOLDER / "ADD-IN.md"
+TOOL = ROOT / "PACE/Product/Tools/pace_overview.py"
+HOSTS_HELP = ROOT / "PACE/Product/Help/hosts-and-views.md"
 EXAMPLE = ROOT / "example"
 EXAMPLE_PAGE = EXAMPLE / "Views/2026-10-30-project-overview.html"
+EXAMPLE_AS_AT = "2026-10-30T09:00:00+13:00"
 
 _spec = importlib.util.spec_from_file_location("pace_record", ROOT / "PACE/Product/Tools/pace_record.py")
 pr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pr)
+_spec = importlib.util.spec_from_file_location("pace_overview", TOOL)
+po = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(po)
 
-PRODUCT_NAME = "Pace by Simply Better Reports"
+PRODUCT_NAME = "Pace by SBR"
 VIEWS = ("every project", "one project", "by person")
 FACTS = ("As at", "Asked", "Searched", "Could not read")
+# SBR brand kit edition 02: plum, citron, warm paper, stone and olive, with tints of them for panels and quiet text.
+BRAND = {"#35293d", "#dbf36b", "#faf6f0", "#e9e0d8", "#4f5c10"}
+TINTS = {"#f2ebe2", "#5e5068", "#3f3248", "#c9bad6", "#5a4a66", "#ffffff", "#4b3f55", "#b5a79a"}
 
 # Everything a page may contain. No element or attribute here can run code or fetch anything.
+COMMON_ATTRIBUTES = {"lang", "charset", "name", "content", "class"}
+TAG_ATTRIBUTES = {
+    "details": {"class", "open"},
+    "svg": {"class", "viewbox", "role", "aria-label"},
+    "path": {"d", "transform", "fill"},
+    "rect": {"x", "y", "width", "height", "fill"},
+}
 ALLOWED_TAGS = {
     "html", "head", "meta", "title", "style", "body", "main", "header", "footer", "section",
     "article", "div", "h1", "h2", "h3", "p", "dl", "dt", "dd", "ul", "ol", "li", "strong", "span",
+    "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "path", "rect",
 }
-ALLOWED_ATTRIBUTES = {"lang", "charset", "name", "content", "class"}
 VOID = {"meta"}
+SVG_CHILDREN = {"path", "rect"}
 PHRASING = {"strong", "span"}
 HEAD_CHILDREN = {"meta", "title", "style"}
 FORBIDDEN = re.compile(
-    r"<\s*(?:script|link|img|iframe|frame|object|embed|base|form|input|button|svg|math|video|audio|source|picture)\b"
-    r"|\b(?:src|href|srcset|action|style)\s*="
+    r"<\s*(?:script|link|img|iframe|frame|object|embed|base|form|input|button|math|video|audio|source|picture|image|use|foreignobject|a)\b"
+    r"|\b(?:src|href|xlink:href|srcset|action|style)\s*="
     r"|\bon[a-z]+\s*="
     r"|url\s*\(|@import|@font-face|://|http-equiv|javascript:",
     re.I,
@@ -58,6 +81,7 @@ HOSTILE = (
     "&lt;already escaped&gt; &amp; &#39;",
     "<!-- hidden --> <style>body{display:none}</style>",
     "<a href=\"https://example.invalid\">link</a>",
+    "<svg onload=alert(1)><path d=\"M0\"/></svg>",
 )
 
 
@@ -75,6 +99,7 @@ class Page(HTMLParser):
         self.text = []
         self._stack = []
         self._open_items = []
+        self._details_children = []
         self.feed(text)
         self.close()
         if self._stack:
@@ -105,7 +130,7 @@ class Page(HTMLParser):
             self.problems.append(f"{tag} outside html")
         if parent == "head" and tag not in HEAD_CHILDREN:
             self.problems.append(f"{tag} inside head")
-        if parent in ("p", "h1", "h2", "h3", "dt", "strong", "span") and tag not in PHRASING:
+        if parent in ("p", "h1", "h2", "h3", "dt", "strong", "span", "summary") and tag not in PHRASING:
             self.problems.append(f"{tag} inside {parent}")
         if parent in ("ul", "ol") and tag != "li":
             self.problems.append(f"{tag} directly inside {parent}")
@@ -115,14 +140,39 @@ class Page(HTMLParser):
             self.problems.append(f"li inside {parent}")
         if tag in ("dt", "dd") and parent != "dl":
             self.problems.append(f"{tag} inside {parent}")
+        if parent == "table" and tag not in ("thead", "tbody"):
+            self.problems.append(f"{tag} directly inside table")
+        if tag in ("thead", "tbody") and parent != "table":
+            self.problems.append(f"{tag} inside {parent}")
+        if parent in ("thead", "tbody") and tag != "tr":
+            self.problems.append(f"{tag} directly inside {parent}")
+        if tag == "tr" and parent not in ("thead", "tbody"):
+            self.problems.append(f"tr inside {parent}")
+        if tag in ("th", "td") and parent != "tr":
+            self.problems.append(f"{tag} inside {parent}")
+        if parent == "tr" and tag not in ("th", "td"):
+            self.problems.append(f"{tag} directly inside tr")
+        if (tag in SVG_CHILDREN) != (parent == "svg"):
+            self.problems.append(f"{tag} inside {parent}")
+        if tag == "svg" and parent != "div":
+            self.problems.append(f"svg inside {parent}")
+        if parent == "details":
+            if not self._details_children[-1] and tag != "summary":
+                self.problems.append("details does not start with summary")
+            self._details_children[-1].append(tag)
+        if tag == "summary" and parent != "details":
+            self.problems.append(f"summary inside {parent}")
 
     def _record_tag(self, tag, attrs):
         values = dict(attrs)
         if len(values) != len(attrs):
             self.problems.append(f"repeated attribute on {tag}")
-        for name in values:
-            if name not in ALLOWED_ATTRIBUTES:
+        allowed = TAG_ATTRIBUTES.get(tag, COMMON_ATTRIBUTES)
+        for name, value in values.items():
+            if name not in allowed:
                 self.problems.append(f"attribute not allowed: {tag} {name}")
+            if name == "fill" and value != "currentColor":
+                self.problems.append(f"fill other than currentColor: {value}")
         self.tags.append((tag, values))
         return values
 
@@ -132,13 +182,15 @@ class Page(HTMLParser):
         if tag in VOID:
             return
         self._stack.append((tag, values.get("class", "").split()))
+        if tag == "details":
+            self._details_children.append([])
         if tag == "li" and "item" in self._stack[-1][1]:
             self._open_items.append((len(self._stack), []))
 
     def handle_startendtag(self, tag, attrs):
         self._check_place(tag)
         self._record_tag(tag, attrs)
-        if tag not in VOID:
+        if tag not in VOID and tag not in SVG_CHILDREN:
             self.problems.append(f"{tag} written as self-closing")
 
     def handle_endtag(self, tag):
@@ -151,6 +203,8 @@ class Page(HTMLParser):
         if self._open_items and self._open_items[-1][0] == len(self._stack):
             _, parts = self._open_items.pop()
             self.items.append(" ".join("".join(parts).split()))
+        if tag == "details":
+            self._details_children.pop()
         self._stack.pop()
 
     def handle_data(self, data):
@@ -187,7 +241,7 @@ def escape(text, rules):
 
 
 def first_item_block():
-    return re.search(r'<li class="item">.*?</li>', read(TEMPLATE), re.S).group(0)
+    return re.search(r'<li class="item[^"]*">.*?</li>', read(TEMPLATE), re.S).group(0)
 
 
 def views(text):
@@ -200,12 +254,36 @@ def views(text):
     return found
 
 
+def wordmark(text):
+    return re.search(r'<svg class="wordmark".*?</svg>', text, re.S).group(0)
+
+
 def long_date(day):
     return f"{day.day} {day:%B %Y}"
 
 
 def short_date(day):
     return f"{day.day} {day:%b %Y}"
+
+
+def luminance(colour):
+    channels = [int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast(one, two):
+    high, low = sorted((luminance(one), luminance(two)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def palettes(style):
+    light = dict(re.findall(r"(--[a-z-]+): (#[0-9a-f]{6});", re.search(r":root \{(.*?)\}", style, re.S).group(1)))
+    found = {"light": light}
+    for name, media in (("dark", "@media (prefers-color-scheme: dark)"), ("print", "@media print")):
+        block = re.search(rf"{re.escape(media)} \{{\s*:root \{{(.*?)\}}", style, re.S).group(1)
+        found[name] = dict(re.findall(r"(--[a-z-]+): (#[0-9a-f]{6});", block))
+    return found
 
 
 class TemplateTests(unittest.TestCase):
@@ -231,15 +309,38 @@ class TemplateTests(unittest.TestCase):
         for media in ("@media (prefers-color-scheme: dark)", "@media print", "@media (max-width: 40rem)"):
             self.assertEqual(style.count(media), 1, media)
         # Every colour is a named setting, and dark mode and print each set every one of them.
-        light = re.search(r":root \{(.*?)\}", style, re.S).group(1)
-        names = set(re.findall(r"(--[a-z-]+):", light))
-        self.assertGreater(len(names), 5)
-        for media in ("@media (prefers-color-scheme: dark)", "@media print"):
-            block = re.search(rf"{re.escape(media)} \{{\s*:root \{{(.*?)\}}", style, re.S).group(1)
-            self.assertEqual(set(re.findall(r"(--[a-z-]+):", block)), names, media)
+        found = palettes(style)
+        self.assertGreater(len(found["light"]), 5)
+        self.assertEqual(set(found["dark"]), set(found["light"]))
+        self.assertEqual(set(found["print"]), set(found["light"]))
         for line in style.splitlines():
             if re.search(r"#[0-9a-fA-F]{3,6}\b", line):
                 self.assertRegex(line, r"^\s*--[a-z-]+: #[0-9a-f]{6};$")
+
+    def test_template_uses_the_sbr_brand(self):
+        style = Page(read(TEMPLATE)).style
+        found = palettes(style)
+        colours = set().union(*(set(palette.values()) for palette in found.values()))
+        self.assertLessEqual(colours, BRAND | TINTS)  # never red and green: the brand's own colours and tints of them
+        light, dark = found["light"], found["dark"]
+        self.assertEqual((light["--bg"], light["--text"], light["--rule"], light["--accent"], light["--mark"]),
+                         ("#faf6f0", "#35293d", "#e9e0d8", "#4f5c10", "#dbf36b"))  # paper, plum, stone, olive, citron
+        self.assertEqual((dark["--bg"], dark["--text"], dark["--accent"]), ("#35293d", "#faf6f0", "#dbf36b"))
+        # Text holds at least 4.5:1 against both its backgrounds in every scheme, and citron is only a fill behind plum.
+        for scheme, palette in found.items():
+            for ink in ("--text", "--muted", "--accent"):
+                for ground in ("--bg", "--panel"):
+                    with self.subTest(scheme=scheme, ink=ink, ground=ground):
+                        self.assertGreaterEqual(contrast(palette[ink], palette[ground]), 4.5)
+            self.assertGreaterEqual(contrast(palette["--on-mark"], palette["--mark"]), 4.5)
+        self.assertIn('font: 15px/1.5 "Instrument Sans", Arial, sans-serif;', style)
+        self.assertIn("h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; }", style)
+        # The SBR wordmark is the brand kit's artwork, drawn in the text colour so it reverses in dark mode.
+        mark = wordmark(read(TEMPLATE))
+        self.assertTrue(mark.startswith('<svg class="wordmark" viewBox="0 0 714.2091 399.0466" role="img" aria-label="SBR">'))
+        self.assertEqual((mark.count("<path "), mark.count("<rect ")), (3, 2))
+        self.assertEqual(mark.count('fill="currentColor"'), 5)
+        self.assertIn(".wordmark { display: block; width: 7rem; height: auto; color: var(--text); }", style)  # 88 px or more of visible mark
 
     def test_template_has_the_three_views_and_the_lines_every_page_needs(self):
         text = read(TEMPLATE)
@@ -255,36 +356,54 @@ class TemplateTests(unittest.TestCase):
         header = text[text.index("<header>"):header_end]
         self.assertEqual(re.findall(r"<dt>(.*?)</dt>", header), list(FACTS))
         self.assertIn(f'<p class="product">{PRODUCT_NAME}</p>', header)
+        self.assertIn(wordmark(text), header)
         self.assertIn(f"<p>{PRODUCT_NAME}</p>", text[footer_start:])
         self.assertRegex(text, rf"<title>[^<]+ - {PRODUCT_NAME}</title>")
         every = text[found[0][1]:found[0][2]]
-        for label in ("Owned by", "Due", "Recorded two ways", "Overdue", "Due soon", "Waiting on you"):
-            self.assertIn(label, every)
-        self.assertLess(every.index("Overdue"), every.index("Due soon"))
-        self.assertLess(every.index("Due soon"), every.index("Waiting on you"))
+        tiles = re.findall(r'<span class="count">\{\{number\}\}</span> ([^<]+)</li>', every)
+        self.assertEqual(tiles, ["overdue", "due today", "due in the next 7 days", "waiting on you", "waiting on others",
+                                 "with no due date"])
+        self.assertEqual(re.findall(r"<h2>(.*?)</h2>", every), ["Recorded two ways", "Needs attention", "Projects",
+                                                               "Open work by project"])
+        self.assertEqual(re.findall(r"<th[^>]*>(\w[^<]*)</th>", every), ["Project", "Owner", "Target", "Open", "Overdue", "Earliest due", "Last recorded"])
+        self.assertEqual(re.findall(r'<h3 class="group">(.*?)</h3>', every), ["Waiting on you", "Waiting on others", "No person named"])
+        self.assertIn('<details class="project" open>', every)
         one = text[found[1][1]:found[1][2]]
-        headings = re.findall(r"<h3>(.*?)</h3>", one)
-        self.assertEqual(headings, [
-            "Recorded two ways", "Decisions waiting on you", "Open tasks", "Related work", "Notes",
-            "Projects inside it", "Documents and repository references", "Done in the last three weeks",
-            "Cancelled",
+        self.assertEqual(re.findall(r"<h2>(.*?)</h2>", one), [
+            "Recorded two ways", "Needs attention", "Projects", "Open work", "Decided in the last three weeks",
+            "Changed in the last three weeks", "Done in the last three weeks", "Cancelled in the last three weeks",
+            "Notes from the last three weeks", "Documents and repository references",
         ])
-        for label in ("Purpose", "State"):
-            self.assertIn(f"<dt>{label}</dt>", one)
+        self.assertEqual(re.findall(r"<dt>(.*?)</dt>", one), ["Purpose", "Owner", "Target", "Status", "Part of",
+                                                               "Projects inside it", "Last recorded"])
+        # Both tables have the same columns and cells, and on a phone each cell carries its own label.
+        for view in (every, one):
+            self.assertEqual(re.findall(r"<th[^>]*>(\w[^<]*)</th>", view)[-7:], ["Project", "Owner", "Target", "Open", "Overdue", "Earliest due", "Last recorded"])
+            self.assertEqual(re.findall(r'<td class="([^"]+)">', view),
+                             ["owner", "target late", "num open", "num overdue late", "due late", "last"])
+            self.assertIn('<span class="status">', view)
+        style = Page(text).style
+        narrow = style[style.index("@media (max-width: 40rem)"):style.index("@media print")]
+        for cell, label in (("owner", "Owner "), ("target", "Target "), ("open", "Open "), ("overdue", "Overdue "),
+                            ("due", "Earliest due "), ("last", "Last recorded ")):
+            self.assertIn(f'.projects td.{cell}::before {{ content: "{label}"; }}', narrow)
+        self.assertIn(".projects thead { display: none; }", narrow)
         person = text[found[2][1]:found[2][2]]
-        for label in ("Will provide", "Waiting for", "No person named"):
+        for label in ("Owes", "Waiting for", "No person named"):
             self.assertIn(label, person)
 
     def test_escaping_rules_make_record_text_plain_text(self):
         rules = template_rules()
         self.assertEqual(rules, [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#39;")])
-        # The add-in gives the same rules in the same order.
+        # The add-in and the tool use the same rules in the same order.
         self.assertEqual(ADD_IN_RULE.findall(read(ADD_IN)), rules)
+        self.assertEqual(list(po.ESCAPES), rules)
         block = first_item_block()
         expected_tags = [tag for tag, _ in Page(f"<html><ul>{block}</ul></html>").tags]
         for hostile in HOSTILE:
             with self.subTest(text=hostile):
                 escaped = escape(hostile, rules)
+                self.assertEqual(po.esc(hostile), escaped)
                 self.assertIsNone(re.search(r"[<>\"']", escaped))
                 self.assertEqual(html.unescape(escaped), hostile)
                 filled = Page("<html><ul>" + re.sub(r"\{\{[^}]*\}\}", lambda _: escaped, block) + "</ul></html>")
@@ -300,16 +419,45 @@ class TemplateTests(unittest.TestCase):
         text = read(ADD_IN)
         self.assertIn("](overview-template.html)", text)
         gives_back = section(text, "What it gives back")
-        for phrase in ("`Views/`", "self-contained HTML file", "snapshot, never an authority",
+        for phrase in ("`Views/`", "self-contained HTML file", "SBR's brand", "snapshot, never an authority",
                        "short summary in chat", "read back", "as at", "searched", "could not be read"):
             self.assertIn(phrase, gives_back)
         steps = section(text, "Steps")
-        self.assertIn("`Views/2026-10-23-project-overview.html`", steps)
-        self.assertIn("Never replace an existing page", steps)
-        self.assertIn("Only then call it saved", steps)
-        self.assertIn("show both together and ask which stands", steps)
-        self.assertIn("Keep the record's own words and states", steps)
+        for phrase in ("`Views/2026-10-23-project-overview.html`", "Never replace an existing page", "Only then call it saved",
+                       "show both together and ask which stands", "Keep the record's own words and states",
+                       "Do not add a priority, percent complete, on-track or health judgement", "never call related work blocking",
+                       "Needs attention", "Waiting on you", "waiting on others", "no person named", "the longest late first"):
+            self.assertIn(phrase, steps)
         self.assertIn("../../Help/hosts-and-views.md", gives_back)
+
+    def test_help_gives_the_tool_route_and_the_add_in_points_to_it(self):
+        # Add-ins stay in plain words; the tool's commands live in the views help, as the record tool's live in records help.
+        tool_help = section(read(HOSTS_HELP), "The overview tool")
+        commands = re.findall(r"^python3 Product/Tools/pace_overview\.py (.*)$", tool_help, re.M)
+        self.assertEqual(len(commands), 3)
+        parser = po.build_parser()
+        for command in commands:
+            with self.subTest(command=command):
+                args = parser.parse_args(re.sub(r'"<[^>]*>"|<[^>]*>', "x", command).split())
+                self.assertTrue(args.save)
+                self.assertEqual(args.owner, ["x"])
+        self.assertIn("--project", commands[1])
+        self.assertIn("--by-person", commands[2])
+        for phrase in ("Python 3.9 or later", "never replacing a file", "reads it back", "--template",
+                       "takes only the style block, wordmark and footer from it",
+                       "`saved` only when the page was saved and read back", "`placed-not-confirmed`", "`not-made`",
+                       "no `Pace project.md`", "It changes no record."):
+            self.assertIn(phrase, tool_help)
+        for status in ("saved", "placed-not-confirmed", "not-saved", "not-made"):
+            self.assertIn(f'"{status}"', read(TOOL))
+        steps = section(read(ADD_IN), "Steps")
+        self.assertIn('following "The overview tool" in [Assistants and dated views](../../Help/hosts-and-views.md)', steps)
+        self.assertIn("takes only the style, wordmark and footer from the template it is given", steps)
+        self.assertIn("fill in the copy's template by hand instead", steps)
+        self.assertIn("`saved` means saved and read back", steps)
+        self.assertIn("**Otherwise, fill in the template by hand**", steps)
+        self.assertIn("if anything could not be read, the page says it is partial", steps)
+        self.assertNotIn("python3", read(ADD_IN))
 
     def test_only_project_overview_makes_a_page(self):
         shipped = ROOT / "PACE/Product/Pace add-ins"
@@ -335,7 +483,7 @@ class ExamplePageTests(unittest.TestCase):
         self.assertEqual(self.page.doctype, "DOCTYPE html")
         self.assertIsNone(FORBIDDEN.search(self.text))
         tags = [tag for tag, _ in self.page.tags]
-        for tag in ("html", "head", "title", "style", "body", "main", "header", "footer"):
+        for tag in ("html", "head", "title", "style", "body", "main", "header", "footer", "svg"):
             self.assertEqual(tags.count(tag), 1, tag)
         self.assertNotIn("{{", self.text)
         self.assertNotIn("}}", self.text)
@@ -347,6 +495,7 @@ class ExamplePageTests(unittest.TestCase):
     def test_example_page_is_the_template_filled_in(self):
         template = read(TEMPLATE)
         self.assertEqual(self.page.style, Page(template).style)
+        self.assertEqual(wordmark(self.text), wordmark(template))
         self.assertEqual(self.page.comments, ["start: every project view", "end: every project view"])
         # Every class used is one the template uses or its fill-in note names, so the page adds no styling.
         note = re.match(r"<!DOCTYPE html>\n<!--(.*?)-->", template, re.S).group(1)
@@ -365,17 +514,31 @@ class ExamplePageTests(unittest.TestCase):
         self.assertIn("Record/", dict(facts)["Searched"])
         self.assertRegex(self.text, rf"<title>Project overview, {short_date(made)} - {PRODUCT_NAME}</title>")
 
+    def test_example_page_is_exactly_what_the_tool_makes_from_the_example(self):
+        with tempfile.TemporaryDirectory(prefix="pace-overview-example-") as temporary:
+            copy = Path(temporary) / "example"
+            shutil.copytree(EXAMPLE, copy, ignore=shutil.ignore_patterns("__pycache__"))
+            (copy / "Views" / EXAMPLE_PAGE.name).unlink()
+            args = po.build_parser().parse_args(["--pace", str(copy), "--as-at", EXAMPLE_AS_AT, "--save"])
+            out, code = po.run(args)
+            self.assertEqual((out["status"], code, out["page"]), ("saved", 0, f"Views/{EXAMPLE_PAGE.name}"), out)
+            self.assertEqual((copy / out["page"]).read_bytes(), EXAMPLE_PAGE.read_bytes())
+
     def test_example_page_keeps_each_records_own_words(self):
-        self.assertGreater(len(self.page.items), 3)
+        records = []
+        for path in sorted((EXAMPLE / "Record").glob("*.md")):
+            fields, body, problems = pr.parse(path.read_bytes())
+            if fields is not None and not problems:
+                records.append((fields, " ".join(body.split())))
+        self.assertGreater(len(self.page.items), 5)
         for item in self.page.items:
             with self.subTest(item=item[:40]):
-                ids = re.findall(r"\bRecord (\S+)$", item)
-                self.assertEqual(len(ids), 1)
-                path = EXAMPLE / "Record" / f"{ids[0]}.md"
-                self.assertTrue(path.is_file(), path)
-                fields, body, problems = pr.parse(path.read_bytes())
-                self.assertEqual(problems, [])
-                self.assertIn(" ".join(body.split()), item)
+                # Each item is one record, word for word, found by its own text (and its subject when texts repeat).
+                found = [(fields, body) for fields, body in records if body and body in item]
+                if len(found) > 1:
+                    found = [(fields, body) for fields, body in found if (fields.get("subject") or [""])[0] in item]
+                self.assertEqual(len(found), 1, item)
+                fields = found[0][0]
                 state = (fields.get("state") or [""])[0]
                 if state:
                     self.assertRegex(item, rf"\b{state}\b")
@@ -383,14 +546,33 @@ class ExamplePageTests(unittest.TestCase):
                 if due:
                     self.assertIn(f"due {short_date(date.fromisoformat(due))}", item)
 
-    def test_example_page_shows_both_accounts_side_by_side(self):
-        start = self.text.index('<div class="line two-ways">')
-        both = self.text[start:self.text.index("</div>", start)]
+    def test_example_page_shows_both_accounts_side_by_side_and_counts_them_nowhere_else(self):
+        start = self.text.index('<section class="part two-ways">')
+        both = self.text[start:self.text.index("</section>", start)]
         for request in ("20261027T020000Z--maple-budget--brd002", "20261027T220000Z--maple-budget--brd003"):
-            self.assertIn(f"Record {request}", both)
-            fields, _, _ = pr.parse((EXAMPLE / "Record" / f"{request}.md").read_bytes())
+            fields, body, _ = pr.parse((EXAMPLE / "Record" / f"{request}.md").read_bytes())
             self.assertEqual(fields["corrects"], ["20261025T210000Z--maple-budget--brd001"])
-        self.assertIn("which stands?", both)
+            words = po.esc(" ".join(body.split()))
+            self.assertIn(words, both)
+            self.assertEqual(self.text.count(words), 1)
+        self.assertIn("Ask the owner which stands.", both)
+        _, first, _ = pr.parse((EXAMPLE / "Record/20261025T210000Z--maple-budget--brd001.md").read_bytes())
+        self.assertNotIn(po.esc(" ".join(first.split())), self.text)
+
+    def test_pages_show_no_record_references(self):
+        self.assertNotRegex(self.text, r"\bRecord \d{8}T\d{6}Z")
+        self.assertNotIn('class="ref"', self.text)
+        self.assertNotIn("request id", read(TEMPLATE))
+
+    def test_example_page_puts_what_is_late_first(self):
+        start = self.text.index("<h2>Needs attention</h2>")
+        attention = self.text[start:self.text.index("</section>", start)]
+        late = attention.index(po.esc("Sam to send the cost centre list for the <Drivers & Inputs> tab."))
+        self.assertLess(late, attention.index(po.esc("Owner to sign off the wage assumptions so Ana can finish the staff costs.")))
+        self.assertIn('<p class="where">Maple Lantern &rsaquo; Budget 2027</p>', attention)  # a mixed list names the project
+        self.assertIn('<li class="item late">', attention)
+        self.assertIn('<span class="when">2 days late</span>', attention)
+        self.assertIn('<li class="tile key"><span class="count">1</span> overdue</li>', self.text)
 
     def test_example_page_escapes_record_text(self):
         record = read(EXAMPLE / "Record/20261025T204000Z--maple-budget--csl001.md")
@@ -400,10 +582,11 @@ class ExamplePageTests(unittest.TestCase):
         self.assertIn("<Drivers & Inputs>", "".join(self.page.text))
         self.assertNotIn("drivers", {tag for tag, _ in self.page.tags})
 
-    def test_example_carries_the_same_add_in_files(self):
+    def test_example_carries_the_same_add_in_files_and_tool(self):
         for name in ("ADD-IN.md", "overview-template.html"):
             with self.subTest(file=name):
                 self.assertEqual((EXAMPLE / ADD_IN_FOLDER / name).read_bytes(), (ROOT / "PACE" / ADD_IN_FOLDER / name).read_bytes())
+        self.assertEqual((EXAMPLE / "Product/Tools/pace_overview.py").read_bytes(), TOOL.read_bytes())
 
 
 if __name__ == "__main__":
