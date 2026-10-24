@@ -1,0 +1,15 @@
+# Keep live owner data outside the repository, in a separate PACE folder.
+# Keep placeholder markers visible, but ignore accidental contents in owner folders.
+/PACE/Record/*
+!/PACE/Record/.gitkeep
+/PACE/Projects/*
+!/PACE/Projects/.gitkeep
+/PACE/Repos/*
+!/PACE/Repos/.gitkeep
+/PACE/My add-ins/*
+!/PACE/My add-ins/.gitkeep
+/PACE/Release record/*
+!/PACE/Release record/.gitkeep
+
+__pycache__/
+*.py[cod]

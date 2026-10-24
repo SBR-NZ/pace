@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Project overview, 30 Oct 2026 - Pace by Simply Better Reports</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --panel: #f5f7f9;
+  --text: #0f172a;
+  --muted: #4b5a6c;
+  --rule: #d8dee5;
+  --accent: #175873;
+  --overdue: #a8261b;
+  --two-ways: #8a5a00;
+  --waiting: #2f6f97;
+  --soon: #175873;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --panel: #172238;
+    --text: #e3e8ef;
+    --muted: #a4b1c1;
+    --rule: #2e3c55;
+    --accent: #8cc3d6;
+    --overdue: #f2a196;
+    --two-ways: #efc677;
+    --waiting: #9cc5e3;
+    --soon: #8cc3d6;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 Aptos, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.page { max-width: 72rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+.product {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+h1 { margin: 0.2rem 0 1rem; font-size: 1.75rem; line-height: 1.2; }
+h2 { margin: 0 0 0.2rem; font-size: 1.2rem; line-height: 1.3; color: var(--accent); }
+h3 { margin: 0 0 0.2rem; font-size: 1.05rem; line-height: 1.3; }
+p { margin: 0; }
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1.25rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.facts dt { font-weight: 600; color: var(--muted); }
+.facts dd { margin: 0; }
+.glance { margin-top: 0.85rem; font-weight: 600; }
+.view { margin-top: 2rem; }
+.group { margin-top: 2rem; }
+.group > .purpose { color: var(--muted); margin-bottom: 0.75rem; }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.card {
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--accent);
+  border-radius: 6px;
+}
+.card > .purpose { color: var(--muted); }
+.card-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.1rem 1rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+.card-facts dt { color: var(--muted); }
+.card-facts dd { margin: 0; }
+.line { margin-top: 0.85rem; padding-left: 0.7rem; border-left: 3px solid var(--rule); }
+.line.overdue { border-left-color: var(--overdue); }
+.line.two-ways { border-left-color: var(--two-ways); }
+.line.waiting { border-left-color: var(--waiting); }
+.line.soon { border-left-color: var(--soon); }
+.label {
+  margin-bottom: 0.2rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.overdue > .label, .late { color: var(--overdue); }
+.two-ways > .label { color: var(--two-ways); }
+.waiting > .label { color: var(--waiting); }
+.soon > .label { color: var(--soon); }
+.late { font-weight: 600; }
+.items { margin: 0; padding: 0; list-style: none; }
+.items > li { margin-bottom: 0.6rem; }
+.items > li:last-child { margin-bottom: 0; }
+.accounts { margin: 0.35rem 0 0; padding-left: 1.3rem; }
+.accounts > li { margin-bottom: 0.4rem; }
+.meta { color: var(--muted); font-size: 0.875rem; }
+.ref {
+  color: var(--muted);
+  font: 0.75rem/1.4 ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.none { color: var(--muted); font-style: italic; }
+.part { margin-top: 1.5rem; }
+.part > h3 { padding-bottom: 0.25rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--rule); }
+.part.two-ways > h3 { color: var(--two-ways); }
+.files { margin: 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
+.parent { display: block; color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+.foot {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.foot p + p { margin-top: 0.4rem; }
+@media (max-width: 40rem) {
+  body { font-size: 15px; }
+  .page { padding: 1.25rem 0.9rem 2rem; }
+  h1 { font-size: 1.4rem; }
+  .facts { grid-template-columns: 1fr; }
+  .facts dd { margin-bottom: 0.35rem; }
+}
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --text: #000000;
+    --muted: #333333;
+    --rule: #999999;
+    --accent: #175873;
+    --overdue: #8f1d14;
+    --two-ways: #6b4500;
+    --waiting: #175873;
+    --soon: #175873;
+  }
+  @page { margin: 15mm; }
+  body { font-size: 10.5pt; }
+  .page { max-width: none; padding: 0; }
+  .cards { display: block; }
+  .card { margin-bottom: 4mm; }
+  .facts, .card-facts, .line, .items > li { break-inside: avoid; }
+  h1, h2, h3, .label { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+<header>
+<p class="product">Pace by Simply Better Reports</p>
+<h1>Project overview (invented example)</h1>
+<dl class="facts">
+<dt>As at</dt>
+<dd>Friday 30 October 2026, 9:00 am NZDT</dd>
+<dt>Asked</dt>
+<dd>Where does every project stand? Every project in this invented example folder.</dd>
+<dt>Searched</dt>
+<dd>All 11 records in Record/, read in full, with corrections followed to their latest version; the 4 projects in Projects/; and the 2 references in Repos/. This example folder only; no cloud copy was checked.</dd>
+<dt>Could not read</dt>
+<dd>Nothing: every file listed was opened.</dd>
+</dl>
+<p class="glance">3 projects: 1 item recorded two ways, 1 overdue, 1 due soon and 1 waiting on you.</p>
+</header>
+
+<!-- start: every project view -->
+<section class="view">
+<section class="group">
+<h2>Maple Lantern</h2>
+<p class="purpose">Invented parent project.</p>
+<div class="cards">
+<article class="card">
+<h3>Budget 2027</h3>
+<p class="purpose">Invented 2027 budget model.</p>
+<dl class="card-facts">
+<dt>Owned by</dt>
+<dd>Ana Ruiz</dd>
+<dt>Due</dt>
+<dd>27 Nov 2026</dd>
+</dl>
+<p class="ref">Owner and due date: record 20261025T203000Z--maple-budget--own001</p>
+<div class="line two-ways">
+<p class="label">Recorded two ways</p>
+<ul class="items">
+<li>
+<p><strong>Board pack draft</strong> Two accounts; which stands?</p>
+<ol class="accounts">
+<li class="item">
+<p class="what">Board pack draft moved to 12 November, in Ana&#39;s words.</p>
+<p class="meta">From Ana Ruiz &middot; due 12 Nov 2026 &middot; open</p>
+<p class="ref">Record 20261027T020000Z--maple-budget--brd002</p>
+</li>
+<li class="item">
+<p class="what">Board pack draft moved to 16 November, in Sam&#39;s words.</p>
+<p class="meta">From Sam Lee &middot; due 16 Nov 2026 &middot; open</p>
+<p class="ref">Record 20261027T220000Z--maple-budget--brd003</p>
+</li>
+</ol>
+</li>
+</ul>
+</div>
+<div class="line overdue">
+<p class="label">Overdue</p>
+<ul class="items">
+<li class="item">
+<p class="what"><strong>Cost centre list</strong> Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p>
+<p class="meta">Owed by Sam Lee &middot; due 28 Oct 2026 &middot; <span class="late">2 days late</span> &middot; open</p>
+<p class="ref">Record 20261025T204000Z--maple-budget--csl001</p>
+</li>
+</ul>
+</div>
+<div class="line soon">
+<p class="label">Due soon</p>
+<p class="none">None.</p>
+</div>
+<div class="line waiting">
+<p class="label">Waiting on you</p>
+<ul class="items">
+<li class="item">
+<p class="what"><strong>Wage assumptions</strong> Owner to sign off the wage assumptions so Ana can finish the staff costs.</p>
+<p class="meta">For Ana Ruiz &middot; due 3 Nov 2026 &middot; in 4 days &middot; open</p>
+<p class="ref">Record 20261025T205000Z--maple-budget--wag001</p>
+</li>
+</ul>
+</div>
+</article>
+<article class="card">
+<h3>Campaign</h3>
+<p class="purpose">Invented campaign project.</p>
+<dl class="card-facts">
+<dt>Owned by</dt>
+<dd>Not recorded</dd>
+<dt>Due</dt>
+<dd>Not recorded</dd>
+</dl>
+<div class="line overdue">
+<p class="label">Overdue</p>
+<p class="none">None.</p>
+</div>
+<div class="line soon">
+<p class="label">Due soon</p>
+<ul class="items">
+<li class="item">
+<p class="what"><strong>Invented campaign follow-up</strong> Status: open. Review the invented page with the owner.</p>
+<p class="meta">Owed by: not recorded &middot; due 5 Nov 2026 &middot; in 6 days &middot; open</p>
+<p class="ref">Record 20261023T112000Z--maple-campaign--task01</p>
+</li>
+</ul>
+</div>
+<div class="line waiting">
+<p class="label">Waiting on you</p>
+<p class="none">None.</p>
+</div>
+</article>
+<article class="card">
+<h3>Website</h3>
+<p class="purpose">Invented website project.</p>
+<dl class="card-facts">
+<dt>Owned by</dt>
+<dd>Not recorded</dd>
+<dt>Due</dt>
+<dd>Not recorded</dd>
+</dl>
+<div class="line overdue">
+<p class="label">Overdue</p>
+<p class="none">None.</p>
+</div>
+<div class="line soon">
+<p class="label">Due soon</p>
+<p class="none">None.</p>
+</div>
+<div class="line waiting">
+<p class="label">Waiting on you</p>
+<p class="none">None.</p>
+</div>
+</article>
+</div>
+</section>
+</section>
+<!-- end: every project view -->
+
+<footer class="foot">
+<p>A dated snapshot made from the records. It is not a record, it changes nothing and it is never edited: the records in Record/ stand. For a newer picture, make a new page; to put something right, save a correction in Record/.</p>
+<p>Pace by Simply Better Reports</p>
+</footer>
+
+</main>
+</body>
+</html>
