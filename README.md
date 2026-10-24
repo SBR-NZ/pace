@@ -34,4 +34,4 @@ An update replaces only `Product/`, then adds the new release to the end of `Rel
 
 ## Licence
 
-Copyright 2026 Simply Better Reports Limited, trading as SBR. All rights reserved. A licence for using Pace is being prepared; until it is published here, ask SBR before using, copying or sharing Pace. See [LICENSE](LICENSE).
+Pace is licensed under the [PolyForm Shield License 1.0.0](LICENSE). In short: you may use Pace, change it and share it, including in your own business, but not to provide anything that competes with Pace or with what SBR provides using Pace, such as selling or rebranding Pace, or offering to set it up for others. Anyone you pass a copy to must get the licence and its `Required Notice:` line, which every Pace folder carries in `Product/LICENSE.md`. This is a summary; the licence text is what applies. Copyright 2026 Simply Better Reports Limited, trading as SBR.

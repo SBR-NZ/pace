@@ -521,14 +521,28 @@ def _root(root) -> Path:
     return folder
 
 
+UNREADABLE = ("unreadable",)
+
+
 def snapshot_outside_product(root: Path) -> dict:
     """Everything outside Product/ and Release record/, by name, size and modification time.
 
     File contents are not opened (so OneDrive does not download cloud-only files),
     except the small owner files in HASHED_OWNER_FILES, whose bytes are compared too.
+    Something the updater is not allowed to read, such as a host app's own folder seen
+    from a sandbox, is listed as unreadable and not walked into, instead of stopping the
+    update. It cannot be checked, and the updater never writes there.
     """
     view = {}
-    for current, dirs, files in os.walk(root, followlinks=False):
+
+    def cannot_list(error: OSError) -> None:
+        top = Path(os.path.abspath(root))
+        where = Path(os.path.abspath(error.filename)) if error.filename else top
+        if where == top:
+            raise error
+        view[where.relative_to(top).as_posix()] = UNREADABLE
+
+    for current, dirs, files in os.walk(root, followlinks=False, onerror=cannot_list):
         here = Path(current)
         if here == root:
             dirs[:] = [d for d in dirs if d not in (PRODUCT, RELEASE_RECORD)]
@@ -536,23 +550,35 @@ def snapshot_outside_product(root: Path) -> dict:
         for name in list(dirs):
             path = here / name
             rel = path.relative_to(root).as_posix()
-            if _is_link(path):
-                view[rel] = ("link", os.readlink(path) if path.is_symlink() else "junction")
+            try:
+                if _is_link(path):
+                    view[rel] = ("link", os.readlink(path) if path.is_symlink() else "junction")
+                    dirs.remove(name)
+                else:
+                    view[rel] = ("folder",)
+            except PermissionError:
+                view[rel] = UNREADABLE
                 dirs.remove(name)
-            else:
-                view[rel] = ("folder",)
         for name in files:
             path = here / name
             rel = path.relative_to(root).as_posix()
-            if path.is_symlink():
-                view[rel] = ("link", os.readlink(path))
-                continue
-            info = path.stat()
-            entry = ("file", info.st_size, info.st_mtime_ns)
-            if rel in HASHED_OWNER_FILES:
-                entry += (_sha256(path.read_bytes()),)
+            try:
+                if path.is_symlink():
+                    view[rel] = ("link", os.readlink(path))
+                    continue
+                info = path.stat()
+                entry = ("file", info.st_size, info.st_mtime_ns)
+                if rel in HASHED_OWNER_FILES:
+                    entry += (_sha256(path.read_bytes()),)
+            except PermissionError:
+                entry = UNREADABLE
             view[rel] = entry
     return view
+
+
+def not_checked(view: dict) -> list:
+    """The paths a snapshot outside Product could not read, so could not check."""
+    return sorted(path for path, entry in view.items() if entry == UNREADABLE)
 
 
 def _differences(before: dict, after: dict) -> list:
@@ -1759,6 +1785,7 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
                 f"Files outside Product changed during the update ({shown}). They were left as they are; "
                 "the updater never rewrites them."
             )
+        unread = not_checked(before)
         journal["phase"] = "installed"
         _write_journal(work, journal)
         _checkpoint("read-back")
@@ -1790,6 +1817,9 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
                 "unchanged": True,
                 "checked": ("Names, sizes and modification times of everything outside Product/ and "
                             f"{RELEASE_RECORD}/, and the bytes of " + ", ".join(HASHED_OWNER_FILES) + "."),
+                **({"not_checked": unread,
+                    "why_not_checked": "The updater is not allowed to read these, and it never writes there."}
+                   if unread else {}),
             },
         }
         written = _write_record(folder, record, record_name)
@@ -1840,6 +1870,9 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
               "onedrive": "not checked",
               "message": (f"{claim} Pace {tag} (commit {commit}) is in place. Whether OneDrive has received "
                           "it is a separate check.")}
+    if unread:
+        result["not_checked"] = unread
+        result["message"] += f" Not checked, because the updater may not read them: {_list(unread)}."
     result["pace_md"] = pace_md
     if pace_md.get("status") in ("updated", "not updated"):
         result["message"] += " " + pace_md["message"]

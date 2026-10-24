@@ -63,7 +63,7 @@ Format `pace-product-file-list/1`: a JSON array of `{"path", "size", "sha256"}` 
 
 ## The check outside Product
 
-Everything outside `Product/` and `Release record/` is compared before and after by name, size and modification time, and `Pace.md` and the host pointers also by their bytes. Other owner files are not opened, so OneDrive does not download cloud-only files during an update. During the install the updater never writes outside `Product/` and `Release record/`; a change found there was made by something else, and is left as it is while Product rolls back. Only after the install is recorded does it write `Pace.md`, once, replacing just the Pace parts that still match the fingerprints in its last line (see Product updates help), then reading it back.
+Everything outside `Product/` and `Release record/` is compared before and after by name, size and modification time, and `Pace.md` and the host pointers also by their bytes. Other owner files are not opened, so OneDrive does not download cloud-only files during an update. A file or folder the updater is not allowed to read, such as the Claude desktop app's own `Claude/` folder seen from its Linux sandbox, is listed as unreadable and not walked into. It is compared only as unreadable, so it is not checked, and the install record (`not_checked`) and the result name it. During the install the updater never writes outside `Product/` and `Release record/`; a change found there was made by something else, and is left as it is while Product rolls back. Only after the install is recorded does it write `Pace.md`, once, replacing just the Pace parts that still match the fingerprints in its last line (see Product updates help), then reading it back.
 
 ## Records
 

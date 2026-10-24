@@ -947,6 +947,124 @@ class SafetyTests(UpdateCase):
         self.assert_product_is(self.lab.c2)
 
 
+class UnreadableFolderTests(UpdateCase):
+    """A folder the updater is not allowed to read, as the Claude desktop app's own folder is from its Linux sandbox."""
+
+    LOCKED = ("Claude/Claude Tasks and Artifacts/Artifacts", "Claude/Claude Tasks and Artifacts/Scheduled")
+    BESIDE = "Claude/Claude Tasks and Artifacts/Projects/XYZ"
+
+    def setUp(self):
+        super().setUp()
+        for rel in self.LOCKED:
+            (self.lab.root / rel).mkdir(parents=True)
+            (self.lab.root / rel / "task.json").write_text("{}\n", encoding="utf-8")
+        (self.lab.root / self.BESIDE).mkdir(parents=True)
+
+    def locked(self, *rels, listing_only=False):
+        """These paths and everything below them raise PermissionError, as the sandbox does: on looking at
+        them (lstat, stat) and on listing them. With listing_only, they can be looked at but not listed."""
+        prefixes = [os.path.abspath(self.lab.root / rel) for rel in rels]
+
+        def deny(path):
+            if isinstance(path, int):  # a folder opened by descriptor, as shutil.rmtree does when tidying up
+                return
+            text = os.path.abspath(os.fsdecode(path))
+            if any(text == prefix or text.startswith(prefix + os.sep) for prefix in prefixes):
+                raise PermissionError(errno.EACCES, "Permission denied", text)
+
+        real_is_symlink, real_stat, real_scandir = Path.is_symlink, Path.stat, os.scandir
+
+        def is_symlink(path):
+            deny(path)
+            return real_is_symlink(path)
+
+        def stat(path, *args, **kwargs):
+            deny(path)
+            return real_stat(path, *args, **kwargs)
+
+        def scandir(path=".", *args, **kwargs):
+            deny(path)
+            return real_scandir(path, *args, **kwargs)
+
+        stack = contextlib.ExitStack()
+        if not listing_only:
+            stack.enter_context(mock.patch.object(Path, "is_symlink", is_symlink))
+            stack.enter_context(mock.patch.object(Path, "stat", stat))
+        stack.enter_context(mock.patch.object(os, "scandir", scandir))
+        return stack
+
+    def test_a_folder_it_may_not_read_is_named_and_not_walked_into(self):
+        with self.locked(*self.LOCKED):
+            view = pu.snapshot_outside_product(self.lab.root)
+        for rel in self.LOCKED:
+            self.assertEqual(view[rel], pu.UNREADABLE)
+            self.assertEqual([path for path in view if path.startswith(rel + "/")], [])
+        self.assertEqual(view[self.BESIDE], ("folder",))
+        self.assertEqual(view["Pace.md"][0], "file")  # everything else is still looked at
+        self.assertEqual(pu.not_checked(view), sorted(self.LOCKED))
+
+    def test_a_folder_it_may_look_at_but_not_list_is_named_too(self):
+        with self.locked(*self.LOCKED, listing_only=True):
+            view = pu.snapshot_outside_product(self.lab.root)
+        self.assertEqual(pu.not_checked(view), sorted(self.LOCKED))
+        self.assertEqual([path for path in view if path.startswith(self.LOCKED[0] + "/")], [])
+
+    def test_an_unreadable_file_is_named(self):
+        rel = "Record/2026-10-01 0900 Invented Bakery decision.md"
+        with self.locked(rel):
+            view = pu.snapshot_outside_product(self.lab.root)
+        self.assertEqual(pu.not_checked(view), [rel])
+
+    def test_a_pace_folder_it_may_not_list_still_stops(self):
+        with self.locked("."), self.assertRaises(PermissionError):
+            pu.snapshot_outside_product(self.lab.root)
+
+    def test_the_update_installs_and_names_what_was_not_checked(self):
+        owner_before = owner_view(self.lab.root)
+        with self.locked(*self.LOCKED):
+            result = self.lab.apply("v3.2.0", self.lab.c2)
+        self.assertEqual(result["status"], "installed", result.get("message"))
+        self.assert_product_is(self.lab.c2)
+        self.assertEqual(owner_view(self.lab.root), owner_before)
+        self.assertEqual(result["not_checked"], sorted(self.LOCKED))
+        self.assertIn("Not checked, because the updater may not read them: Claude/Claude Tasks and Artifacts/Artifacts, "
+                      "Claude/Claude Tasks and Artifacts/Scheduled.", result["message"])
+        outside = self.lab.records()[-1]["outside_product"]
+        self.assertTrue(outside["unchanged"])
+        self.assertEqual(outside["not_checked"], sorted(self.LOCKED))
+        self.assertIn("never writes there", outside["why_not_checked"])
+
+    def test_with_nothing_unreadable_nothing_is_named(self):
+        result = self.lab.apply("v3.2.0", self.lab.c2)
+        self.assertEqual(result["status"], "installed", result.get("message"))
+        self.assertNotIn("not_checked", result)
+        self.assertNotIn("Not checked, because", result["message"])
+        self.assertNotIn("not_checked", self.lab.records()[-1]["outside_product"])
+
+    def test_a_change_beside_an_unreadable_folder_is_still_caught(self):
+        beside = self.lab.root / self.BESIDE / "task.json"
+
+        def write_beside(stage):
+            if stage == "new-in-place":
+                beside.write_text("{}\n", encoding="utf-8")
+
+        with self.locked(*self.LOCKED), mock.patch.object(pu, "_checkpoint", side_effect=write_beside):
+            result = self.lab.apply("v3.2.0", self.lab.c2)
+        self.assertEqual(result["status"], "rolled back")
+        self.assertIn(f"{self.BESIDE}/task.json", result["reason"])
+
+    def test_the_command_line_installs_instead_of_stopping_on_a_file_error(self):
+        out = io.StringIO()
+        with self.locked(*self.LOCKED), contextlib.redirect_stdout(out):
+            code = pu.main(["apply", "--root", str(self.lab.root), "--repo", str(self.lab.repo.path), "--tag", "v3.2.0",
+                            "--commit", self.lab.c2, "--go-ahead", self.lab.go_ahead("v3.2.0", self.lab.c2)])
+        text = out.getvalue()
+        self.assertEqual(code, 0, text)
+        self.assertNotIn("file error", text)
+        self.assertIn("Not checked, because the updater may not read them", text)
+        self.assert_product_is(self.lab.c2)
+
+
 class CreateOnlyFolderTests(UpdateCase):
     """Some linked assistant sessions can create files in the Pace folder but not rename or delete them."""
 
