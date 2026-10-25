@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Project overview, 30 Oct 2026 - Pace by SBR</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #faf6f0;
+  --panel: #f2ebe2;
+  --text: #35293d;
+  --muted: #5e5068;
+  --rule: #e9e0d8;
+  --accent: #4f5c10;
+  --mark: #dbf36b;
+  --on-mark: #35293d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #35293d;
+    --panel: #3f3248;
+    --text: #faf6f0;
+    --muted: #c9bad6;
+    --rule: #5a4a66;
+    --accent: #dbf36b;
+    --mark: #dbf36b;
+    --on-mark: #35293d;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 "Instrument Sans", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.page { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--text);
+}
+.wordmark { display: block; width: 7rem; height: auto; color: var(--text); }
+.product {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; }
+h1 { margin: 0; font-size: 2rem; line-height: 1.15; }
+h2 { margin: 0; font-size: 1.15rem; line-height: 1.25; }
+p { margin: 0; }
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 1.25rem 0 0.25rem;
+}
+.asat, .lead, .sub { color: var(--muted); }
+h1, .lead, .known, .sub, .meta, .group, .quiet, .none, .fold > summary, .week > summary { overflow-wrap: anywhere; }
+.asat { font-size: 0.9rem; }
+.known { display: flex; flex-wrap: wrap; gap: 0.2rem 1.5rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.92rem; }
+.known strong { color: var(--text); font-weight: 600; }
+.partial { margin-top: 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--accent); background: var(--panel); }
+.summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 2rem; margin: 1.5rem 0 0.4rem; }
+.stat { color: var(--muted); }
+.stat strong { margin-right: 0.35rem; color: var(--text); font-size: 2rem; font-weight: 500; line-height: 1; }
+.stat.hot strong { color: var(--accent); }
+.stat.zero strong { color: var(--muted); font-weight: 400; }
+.week { margin-top: 0.9rem; color: var(--muted); }
+.week strong { color: var(--text); }
+.week > .body { padding-left: 0; }
+.part { margin-top: 2.25rem; }
+.part > h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--text);
+}
+.n { color: var(--muted); font-size: 0.95rem; font-weight: 400; letter-spacing: 0; }
+.lede { margin: 0.5rem 0; color: var(--muted); }
+.rows { margin: 0; padding: 0; list-style: none; }
+.rows > li { border-bottom: 1px solid var(--rule); }
+summary { cursor: pointer; }
+.row > summary, .node > summary { list-style: none; }
+.row > summary::-webkit-details-marker, .node > summary::-webkit-details-marker { display: none; }
+.row > summary {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) auto;
+  gap: 0 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0.25rem;
+}
+.row > summary:hover, .row[open] > summary { background: var(--panel); }
+.subj, .text { overflow-wrap: anywhere; }
+.by, .itself { color: var(--muted); font-weight: 400; }
+.side { max-width: 18rem; color: var(--muted); font-size: 0.85rem; text-align: right; overflow-wrap: anywhere; }
+.go { margin-top: 0.35rem; font-size: 0.85rem; }
+.jump { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 0.2em; }
+.jump:hover { text-decoration-color: var(--muted); }
+.more { padding: 0.25rem 0.25rem 0.75rem 8.25rem; background: var(--panel); }
+.more p + p { margin-top: 0.25rem; }
+.meta { color: var(--muted); font-size: 0.85rem; }
+.tag { justify-self: start; color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+.tag.late { color: var(--accent); font-weight: 700; }
+.tag.today { padding: 0 0.3em; background: var(--mark); color: var(--on-mark); font-weight: 700; }
+.tag.soon { color: var(--text); font-weight: 600; }
+.tag.age { color: var(--text); }
+.heads, .node > summary {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) 3rem 7.5rem 6.5rem;
+  gap: 0 0.75rem;
+  align-items: baseline;
+  padding: 0.55rem 0.25rem;
+}
+.heads {
+  padding: 0.35rem 0.25rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.node { border-bottom: 1px solid var(--rule); }
+.node .node { border-bottom: 0; border-top: 1px solid var(--rule); }
+.node > summary::before { content: "\203A"; display: inline-block; color: var(--muted); transition: transform 0.15s; }
+.node[open] > summary::before { transform: rotate(90deg); }
+.node > summary:hover, .node:target > summary { background: var(--panel); }
+.pname { font-weight: 600; overflow-wrap: anywhere; }
+.parent > summary .pname { font-size: 1.05rem; }
+.status, .fact, .next { display: block; margin-top: 0.1rem; color: var(--muted); font-size: 0.88rem; font-weight: 400; overflow-wrap: anywhere; }
+.status { font-style: italic; }
+.fact .late, .known .late { color: var(--accent); font-weight: 700; }
+.num { text-align: right; }
+.last { color: var(--muted); }
+.body { padding: 0 0 0.5rem 1.75rem; }
+.group {
+  margin: 0.75rem 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fold > summary { padding: 0.4rem 0; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.none, .quiet { margin-top: 0.6rem; color: var(--muted); }
+.none { font-style: italic; }
+.two-ways { padding: 0.75rem 1rem; border: 2px solid var(--accent); border-radius: 4px; }
+.pair { padding: 0.5rem 0; }
+.accounts { margin: 0.35rem 0 0; padding-left: 1.3rem; }
+.accounts > li + li { margin-top: 0.4rem; }
+.files { margin: 0.4rem 0 0; padding-left: 1.2rem; color: var(--muted); overflow-wrap: anywhere; }
+details.files { padding-left: 0; }
+.about { margin-top: 3rem; color: var(--muted); font-size: 0.85rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.foot {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px solid var(--text);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.foot p + p { margin-top: 0.4rem; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 40rem) {
+  .page { padding: 1.25rem 0.9rem 2rem; }
+  h1 { font-size: 1.6rem; }
+  .summary { gap: 0.5rem 1.25rem; }
+  .stat strong { font-size: 1.6rem; }
+  .row > summary { grid-template-columns: 5.5rem minmax(0, 1fr); }
+  .tag { white-space: normal; }
+  .side { grid-column: 2; max-width: none; text-align: left; }
+  .more { padding-left: 0.25rem; }
+  .heads { display: none; }
+  .node > summary { grid-template-columns: 1rem minmax(0, 1fr) auto; }
+  .node > summary .num, .node > summary .last { display: none; }
+  .body { padding-left: 0.75rem; }
+  .facts { grid-template-columns: 1fr; }
+}
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --text: #35293d;
+    --muted: #4b3f55;
+    --rule: #b5a79a;
+    --accent: #4f5c10;
+    --mark: #ffffff;
+    --on-mark: #35293d;
+  }
+  @page { margin: 15mm; }
+  body { font-size: 10.5pt; }
+  .page { max-width: none; padding: 0; }
+  .node::details-content, .fold::details-content, .files::details-content { content-visibility: visible; display: block; }
+  .node > summary::before { content: ""; }
+  .tag.today { text-decoration: underline; }
+  .jump { text-decoration: none; }
+  .rows > li, .node > summary, .heads { break-inside: avoid; }
+  h1, h2, .group, summary { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+
+<header>
+<div class="brand">
+<p class="product">Pace by SBR</p>
+<svg class="wordmark" viewBox="0 0 714.2091 399.0466" role="img" aria-label="SBR"><path d="M641 -18Q549 -18 462.0 6.0Q375 30 275 81L206 0H144L105 507L188 520Q252 297 357.5 197.0Q463 97 638 97Q763 97 837.5 157.0Q912 217 912 322Q912 385 859.5 439.5Q807 494 679 556L518 636Q322 733 230.0 851.0Q138 969 138 1126Q138 1247 205.0 1341.5Q272 1436 386.5 1490.0Q501 1544 646 1544Q849 1544 994 1421L1041 1526H1107L1126 1088H1039Q990 1257 895.5 1342.0Q801 1427 656 1427Q554 1427 497.0 1377.0Q440 1327 440 1239Q440 1171 491.0 1117.5Q542 1064 668 1000L826 919Q1014 823 1096.5 708.0Q1179 593 1179 432Q1179 304 1108.0 202.0Q1037 100 915.0 41.0Q793 -18 641 -18Z" transform="translate(41.74993906897392,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H750Q900 1523 999.5 1503.5Q1099 1484 1166 1443Q1243 1394 1285.5 1318.0Q1328 1242 1328 1154Q1328 1034 1232.0 950.5Q1136 867 960 836V828Q1093 815 1193.0 758.0Q1293 701 1348.5 610.5Q1404 520 1404 404Q1404 313 1364.5 234.0Q1325 155 1257 104Q1181 48 1073.0 24.0Q965 0 786 0ZM744 105Q891 105 961.5 181.5Q1032 258 1032 421Q1032 595 942.0 676.5Q852 758 664 758H592V223Q592 153 624.5 129.0Q657 105 744 105ZM592 865H614Q649 865 674.5 866.5Q700 868 719 871Q838 883 902.0 953.5Q966 1024 966 1146Q966 1216 944.5 1267.0Q923 1318 883 1350Q840 1385 776.0 1400.5Q712 1416 628 1416H592Z" transform="translate(224.25054837923471,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H797Q953 1523 1072.0 1473.5Q1191 1424 1258.0 1327.5Q1325 1231 1325 1090Q1325 946 1252.5 849.0Q1180 752 1049 705L1398 112L1515 73V0H1071L672 663H592V117L818 73V0ZM592 770H620Q727 770 793.0 799.0Q859 828 900 877Q944 926 962.0 986.5Q980 1047 980 1110Q980 1217 932.0 1288.5Q884 1360 807 1391Q773 1405 733.5 1410.5Q694 1416 633 1416H592Z" transform="translate(435.55934681940045,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><rect x="57.10455764075067" y="310.64879356568366" width="600.0" height="7.3093833780160855" fill="currentColor"/><rect x="57.10455764075067" y="330.5211796246649" width="600.0" height="11.420911528150135" fill="currentColor"/></svg>
+</div>
+<div class="title">
+<h1>All projects</h1>
+<p class="asat">As at Friday 30 October 2026, 9:00 am NZDT</p>
+</div>
+</header>
+
+<!-- start: every project view -->
+<section class="view">
+<div class="summary">
+<p class="stat hot"><strong>1</strong> overdue</p>
+<p class="stat zero"><strong>0</strong> due today</p>
+<p class="stat"><strong>2</strong> due in the next 7 days</p>
+</div>
+<p class="sub">3 open in 2 projects &middot; 1 with you, 1 with others, 1 with no one named &middot; 0 with no due date &middot; 1 recorded two ways</p>
+<details class="week">
+<summary>Last 7 days: <strong>3</strong> new &middot; <strong>1</strong> done</summary>
+<div class="body">
+<p class="group">New</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p></div>
+</details></li>
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p></div>
+</details></li>
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
+<div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p></div>
+</details></li>
+</ul>
+<p class="group">Done</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag">Done</span><span class="subj">Invented website job</span><span class="side">Maple Lantern &rsaquo; Website</span></summary>
+<div class="more"><p class="text">Status: done on local branch example/topic; no push, merge or publication claimed.</p><p class="meta">No person named &middot; no due date &middot; done</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+<section class="part two-ways">
+<h2>Recorded two ways <span class="n">1</span></h2>
+<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
+<ul class="rows">
+<li class="pair">
+<p><strong>Board pack draft</strong> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></p>
+<ol class="accounts">
+<li class="item">
+<p class="text">Board pack draft moved to 12 November, in Ana&#39;s words.</p>
+<p class="meta">Owed by Ana Ruiz &middot; for you &middot; due 12 Nov 2026 &middot; open</p>
+</li>
+<li class="item">
+<p class="text">Board pack draft moved to 16 November, in Sam&#39;s words.</p>
+<p class="meta">Owed by Ana Ruiz &middot; for you &middot; due 16 Nov 2026 &middot; open</p>
+</li>
+</ol>
+</li>
+</ul>
+</section>
+<section class="part">
+<h2>Needs attention <span class="n">3</span></h2>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-budget">Go to Maple Lantern &rsaquo; Budget 2027</a></p></div>
+</details></li>
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-budget">Go to Maple Lantern &rsaquo; Budget 2027</a></p></div>
+</details></li>
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
+<div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-campaign">Go to Maple Lantern &rsaquo; Campaign</a></p></div>
+</details></li>
+</ul>
+</section>
+<section class="part">
+<h2>Projects <span class="n">2 with open work, a target or a status</span></h2>
+<div class="heads"><span></span><span>Project and what is next</span><span class="num">Open</span><span>Next due</span><span>Last activity</span></div>
+<details class="node parent" id="p-maple-lantern" open>
+<summary><span class="label"><span class="pname">Maple Lantern</span><span class="next">Next: Cost centre list &middot; Budget 2027 &middot; Sam Lee</span></span><span class="num">3</span><span class="due"><span class="tag late">2 days late</span></span><span class="last">Yesterday</span></summary>
+<div class="body">
+<details class="node" id="p-maple-budget">
+<summary><span class="label"><span class="pname">Budget 2027</span><span class="status">Waiting on the owner&#39;s wage sign-off &middot; 29 Oct 2026</span><span class="fact">Owner Ana Ruiz &middot; Target <span>27 Nov 2026, in 28 days</span></span><span class="next">Next: Cost centre list &middot; Sam Lee</span></span><span class="num">2</span><span class="due"><span class="tag late">2 days late</span></span><span class="last">Yesterday</span></summary>
+<div class="body">
+<p class="group">With you</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side"></span></summary>
+<div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p></div>
+</details></li>
+</ul>
+<p class="group">With Sam Lee</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list</span><span class="side"></span></summary>
+<div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+<details class="node" id="p-maple-campaign">
+<summary><span class="label"><span class="pname">Campaign</span><span class="next">Next: Invented campaign follow-up</span></span><span class="num">1</span><span class="due"><span class="tag soon">In 6 days</span></span><span class="last">6 days ago</span></summary>
+<div class="body">
+<p class="group">No person named</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side"></span></summary>
+<div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+</div>
+</details>
+<p class="quiet">No open work recorded: Maple Lantern &rsaquo; Website.</p>
+</section>
+</section>
+<!-- end: every project view -->
+
+<section class="about">
+<dl class="facts">
+<dt>Asked</dt>
+<dd>Where does every project stand? Every project in 1 Projects/.</dd>
+<dt>Searched</dt>
+<dd>All 12 record files in Record/, each opened, with corrections and withdrawals followed to the current account; and the 4 projects in 1 Projects/. This computer&#39;s copy only; no cloud copy was checked.</dd>
+<dt>Could not read</dt>
+<dd>Nothing: every file listed was opened.</dd>
+</dl>
+</section>
+
+<footer class="foot">
+<p>A dated snapshot made from the records. It is not a record, it changes nothing and it is never edited: the records in Record/ stand. Open any line for its full wording. For a newer picture, make a new page; to put something right, save a correction in Record/.</p>
+<p>Pace by SBR</p>
+</footer>
+
+</main>
+</body>
+</html>

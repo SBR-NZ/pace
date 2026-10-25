@@ -12,7 +12,7 @@ from test_records import PaceFolder, BUDGET, HELP, pr
 class ConfirmationTests(PaceFolder):
     def setUp(self):
         super().setUp()
-        self.act = self.pace / "Projects/Kowhai Books/Budget 2027/Documents/close.txt"
+        self.act = self.pace / "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt"
         self.act.write_bytes(b"Invented October close: accept version A.\n")
         self.words = "Yes, accept the October close statement you just showed me."
 
@@ -50,7 +50,7 @@ class ConfirmationTests(PaceFolder):
         elsewhere.mkdir()
         self.addCleanup(os.chdir, os.getcwd())
         os.chdir(elsewhere)
-        relative = "Projects/Kowhai Books/Budget 2027/Documents/close.txt"
+        relative = "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt"
         out, code = self.run_tool("propose", "--act", "Accept October close", "--act-file", relative)
         self.assertEqual((out["status"], code), ("proposed", 0), out)
         self.assertEqual(out["act_file"], relative)

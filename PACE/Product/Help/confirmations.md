@@ -27,10 +27,10 @@ kind: confirmation
 subject: October close
 from: owner
 words: Yes, close October using the statement you just showed me.
-source: Projects/Kowhai Books/Budget 2027/Documents/close.txt sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+source: 1 Projects/Kowhai Books/Budget 2027/Documents/close.txt sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 by: Test agent
 act: Accept the invented October close statement
-act-file: Projects/Kowhai Books/Budget 2027/Documents/close.txt
+act-file: 1 Projects/Kowhai Books/Budget 2027/Documents/close.txt
 act-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 ---
 
@@ -53,9 +53,9 @@ Owner's current words above confirm the exact act named here, not any later chan
 `python3 Product/Tools/pace_record.py` uses only the standard library. Pass `--pace <folder>` when working outside an installed Pace folder, before or after the command, such as `python3 pace_record.py --pace <folder> confirmation-status --request <request>`. Every command returns a plain `status` and `message` plus details. A relative `--act-file` path starts from the Pace folder, wherever the command is run from. For example, with invented temporary files:
 
 ```text
-python3 Product/Tools/pace_record.py propose --act "Accept the October close statement" --act-file "Projects/Kowhai Books/Budget 2027/Documents/close.txt"
+python3 Product/Tools/pace_record.py propose --act "Accept the October close statement" --act-file "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt"
 python3 Product/Tools/pace_record.py new-request --project kowhai-budget
-python3 Product/Tools/pace_record.py confirm --request <request> --project kowhai-budget --subject "October close" --act "Accept the October close statement" --act-file "Projects/Kowhai Books/Budget 2027/Documents/close.txt" --shown-sha256 <fingerprint-from-propose> --source "Close statement and source notes shown to owner" --owner-words "Yes, close October using the statement you just showed me." --owner-current --by "Test agent"
+python3 Product/Tools/pace_record.py confirm --request <request> --project kowhai-budget --subject "October close" --act "Accept the October close statement" --act-file "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt" --shown-sha256 <fingerprint-from-propose> --source "Close statement and source notes shown to owner" --owner-words "Yes, close October using the statement you just showed me." --owner-current --by "Test agent"
 python3 Product/Tools/pace_record.py confirmation-status --request <request>
 ```
 
@@ -77,7 +77,7 @@ from: agent
 source: Invented client approval result AC-042
 by: Test agent
 act: Accept the invented October close statement
-act-file: Projects/Kowhai Books/Budget 2027/Documents/close.txt
+act-file: 1 Projects/Kowhai Books/Budget 2027/Documents/close.txt
 act-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 confirmation-request: 20261022T221500Z--kowhai-budget--conf01
 approval-system: teams

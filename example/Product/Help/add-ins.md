@@ -25,7 +25,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 | Add-in | What it is for |
 | --- | --- |
 | Daily brief | What needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. |
-| Project overview | Where one project, every project or one person's work stands, kept as a dated page in `Views/` with a short summary in chat. |
+| Project overview | Where one project, every project or one person's work stands, kept as a dated page in `2 Views/` with a short summary in chat. |
 | Key numbers and changes | Reading agreed key numbers from handed-over files and comparing two versions. |
 | What was reported | The exact words of each reporting occasion, and what was reported, when and to whom. |
 | Reminders | A dated follow-up in the record, and a timed reminder where the host can set one. |
@@ -56,25 +56,25 @@ Each line is the add-in's name in bold, a hyphen, its one-line purpose, and the 
 
 ## Customising a shipped add-in
 
-1. Copy the add-in's whole folder, with anything beside its `ADD-IN.md` such as a page template, into `My add-ins/` under a different folder name, for example `Daily brief - mine`.
+1. Copy the add-in's whole folder, with anything beside its `ADD-IN.md` such as a page template, into `3 My add-ins/` under a different folder name, for example `Daily brief - mine`.
 2. Under the title of the copy's `ADD-IN.md`, add a line saying where it came from, for example `**Customised from:** Daily brief`.
 3. Fix the links in the copy's `ADD-IN.md`. The copy sits in a different place, so its help links no longer open: change `../../Help/` to `../../Product/Help/` wherever it appears, and fix any other relative link that leaves the add-in's folder the same way. A link to a file beside `ADD-IN.md`, such as a page template, stays as it is.
 4. Edit the copy as you like.
-5. In `Pace.md`, change the path at the end of that add-in's line to the copy, for example `My add-ins/Daily brief - mine/ADD-IN.md`.
+5. In `Pace.md`, change the path at the end of that add-in's line to the copy, for example `3 My add-ins/Daily brief - mine/ADD-IN.md`.
 
-The index line decides which file is used, so the customised copy is used in place of the shipped one, and the shipped file is no longer opened for that add-in. A file with the same name somewhere else never takes over by itself. A Product update never changes, removes or switches on anything in `My add-ins/`, and never rewrites `Pace.md` without the owner. When a shipped add-in changes, the customised copy stays as it is; the owner can ask to compare the two and adopt any change they want.
+The index line decides which file is used, so the customised copy is used in place of the shipped one, and the shipped file is no longer opened for that add-in. A file with the same name somewhere else never takes over by itself. A Product update never changes, removes or switches on anything in `3 My add-ins/`, and never rewrites `Pace.md` without the owner. When a shipped add-in changes, the customised copy stays as it is; the owner can ask to compare the two and adopt any change they want.
 
 ## Making your own
 
-Create a folder in `My add-ins/` with an `ADD-IN.md` in the format below. Check its one-line purpose reads the way you want, then add its line to the index in `Pace.md` to switch it on.
+Create a folder in `3 My add-ins/` with an `ADD-IN.md` in the format below. Check its one-line purpose reads the way you want, then add its line to the index in `Pace.md` to switch it on.
 
 ## Add-ins in an older folder
 
-An older Pace folder keeps its own and customised add-ins in `Pace/Add-ins/My add-ins/` instead. They keep working there: their index lines still open them, and a Product update never changes, removes, moves or switches on anything in either place. Moving them to `My add-ins/` is optional. Do it only when the owner asks in their own words, after showing them what will change:
+An older Pace folder keeps its own and customised add-ins in `Pace/Add-ins/My add-ins/` instead. They keep working there: their index lines still open them, and a Product update never changes, removes, moves or switches on anything in either place. Moving them to `3 My add-ins/` is optional. Do it only when the owner asks in their own words, after showing them what will change:
 
-1. Move each add-in's whole folder from `Pace/Add-ins/My add-ins/` into `My add-ins/`, keeping its folder name.
+1. Move each add-in's whole folder from `Pace/Add-ins/My add-ins/` into `3 My add-ins/`, keeping its folder name.
 2. Fix the links in each moved `ADD-IN.md`: change `../../../../Product/Help/` to `../../Product/Help/` wherever it appears, and fix any other relative link that leaves the add-in's folder the same way.
-3. In `Pace.md`, change `Pace/Add-ins/My add-ins/` to `My add-ins/` in each index line that names a moved add-in and in the "Where things belong" line, and show the changed lines.
+3. In `Pace.md`, change `Pace/Add-ins/My add-ins/` to `3 My add-ins/` in each index line that names a moved add-in and in the "Where things belong" line, and show the changed lines.
 4. Once nothing but a `.gitkeep` is left anywhere inside `Pace/`, the `Pace/` folder can be deleted.
 
 An assistant that cannot move files or replace `Pace.md`, such as Copilot through OneDrive, says so and leaves the add-ins where they are.

@@ -5,7 +5,7 @@ Projects keep the owner's work in order. A project can sit inside a **parent pro
 ## How projects are laid out
 
 ```text
-Projects/
+1 Projects/
   Kowhai Books/                 <- parent project (a client), id kowhai-books
     Pace project.md
     Budget 2027/                <- project inside it, id kowhai-budget
@@ -73,7 +73,7 @@ Listing projects reports, rather than guesses:
 - a project whose `parent` does not match the folder it sits in;
 - a `Pace project.md` that cannot be read;
 - folders with no `Pace project.md`, which are simply not projects yet. One that holds a project somewhere inside is not listed itself, but the project inside is reported; a folder inside a listed one is not listed again. Folders whose names start with a dot, such as `.git`, are left out unless they hold a `Pace project.md`, and so is a project's `Documents/` folder, whatever the case of its name;
-- a folder that cannot be read, or one with no `Pace project.md` that holds more than 500 folders, which is named rather than taken as empty. So that every command stays quick, no more than 5,000 folders with no `Pace project.md` are looked into in all, and nothing more than 40 levels below `Projects/`; anything past either is named too. A new project's folder name cannot start with a dot, since that hides the folder on some computers.
+- a folder that cannot be read, or one with no `Pace project.md` that holds more than 500 folders, which is named rather than taken as empty. So that every command stays quick, no more than 5,000 folders with no `Pace project.md` are looked into in all, and nothing more than 40 levels below `1 Projects/`; anything past either is named too. A new project's folder name cannot start with a dot, since that hides the folder on some computers.
 
 A record whose project id has no matching folder is still shown, with that gap named.
 

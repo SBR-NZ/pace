@@ -9,10 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PACE_FOLDER = ROOT / "PACE"
 OWNER_FOLDERS = (
     "Record",
-    "Projects",
+    "1 Projects",
     "Repos",
-    "Views",
-    "My add-ins",
+    "2 Views",
+    "3 My add-ins",
     "Release record",
 )
 POINTERS = (

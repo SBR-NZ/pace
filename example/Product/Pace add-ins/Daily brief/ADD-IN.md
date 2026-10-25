@@ -9,7 +9,7 @@ When the owner asks for a daily brief, a morning catch-up or "what needs me toda
 ## What it needs
 
 - Today's date and time zone. Use the host's clock where it has one; otherwise ask.
-- Read access to `Record/` and `Projects/`.
+- Read access to `Record/` and `1 Projects/`.
 - Optionally, the date of the last brief the owner kept, to show what changed since then.
 
 ## Steps
@@ -21,7 +21,7 @@ When the owner asks for a daily brief, a morning catch-up or "what needs me toda
    - **Overdue**: oldest due date first, with the next step when one is recorded.
    - **Today and next**: work due today, then the next three weeks, earliest first.
    - **Waiting on you**: work someone else is waiting for from the owner.
-   - **Still to clarify**: open work with no date, no person responsible, or two accounts, and any folder under `Projects/` that has no `Pace project.md` yet, with the question of what it is.
+   - **Still to clarify**: open work with no date, no person responsible, or two accounts, and any folder under `1 Projects/` that has no `Pace project.md` yet, with the question of what it is.
    - **Since the last brief**: work done since the date the owner gave, or, with no earlier brief, the last seven days with their dates.
 4. Where the record holds two accounts of one item, show both together and ask which stands. Do not choose one. When the owner says which stands, correct the one that stands and withdraw the other, as [Records and source evidence](../../Help/records.md) describes.
 5. Show anything missing as missing, for example "Date not recorded". Do not fill a gap with a guess.

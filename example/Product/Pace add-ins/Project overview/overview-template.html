@@ -3,7 +3,7 @@
   Pace by SBR: Project overview page template.
 
   The Project overview add-in fills in a copy of this file to make a dated
-  page in Views/, such as Views/2026-10-23-project-overview.html. An
+  page in 2 Views/, such as 2 Views/2026-10-23-project-overview.html. An
   assistant that can run Python uses Product/Tools/pace_overview.py, which
   fills it in from the records. Any other assistant can fill it in by hand
   with these notes. The page is a snapshot of the records, never a record
@@ -15,19 +15,25 @@
      note, and delete the other two views with their notes.
   3. Replace every {{...}} with the real text. Copy a block marked "repeat"
      once for each thing it shows. Leave out a block marked "only when"
-     when it does not apply. When a list has nothing in it, replace the
-     whole list with <p class="none">None.</p>
-  4. Use the record's own words and states. Write "Not recorded" for
-     anything the record does not hold, such as "state not recorded" for
-     an open item with no state; never guess. Give an open item
-     the class "item late" when it is overdue and "item today" when it is
-     due today. When it has no due date, write "no due date" in place of
-     "due {{date}}" and leave out its "when" part.
-  5. Delete this note and every other note except the view's "start" and
+     when it does not apply.
+  4. Every item is one line: its tag, its subject, and where it is. Opening
+     the line shows the record's own words, then who owes it, for whom when
+     the record says, its due date and its state. Use the record's own
+     words and states; write "Not recorded" for anything the record does
+     not hold, such as "state not recorded"; never guess.
+  5. The tag says how late or soon the item is due: class="tag late" with
+     "2 days late" when overdue, class="tag today" with "Today" when due
+     today, class="tag soon" with "Tomorrow" or "In 3 days" in the next 7
+     days, and plain class="tag" with a short date, such as "4 Nov", later.
+     Work with no due date first recorded 14 or more days ago gets
+     class="tag age" with "Open 21 days", or "Waiting 21 days" when someone
+     else owes it; other work with no due date gets an empty
+     <span class="tag"></span>.
+  6. Delete this note and every other note except the view's "start" and
      "end" notes. Keep the style block and the SBR wordmark exactly as
      they are.
-  6. Check before saving: no {{ is left, only one view is left, and the
-     As at, Searched and Could not read lines are filled in.
+  7. Check before saving: no {{ is left, only one view is left, and the
+     As at, Asked, Searched and Could not read lines are filled in.
 
   Escaping: escape every piece of text that comes from a record, a file,
   a file name or a person (subjects, record text, names, words) before it
@@ -40,10 +46,11 @@
     '  with  &#39;
   The & must be done first. Never paste record text in as HTML.
 
-  Add nothing the template does not have: no script, link, image, font,
-  frame, form, style attribute or web address. The page must open the same
-  way in any browser, on a phone, in light or dark, printed, and with no
-  network.
+  Add nothing the template does not have: no script, image, font, frame,
+  form, style attribute or web address. The only links are the jumps to a
+  row on the same page, each to #p- and a project id. The page must open
+  the same way in any browser, on a phone, in light or dark, printed, and
+  with no network.
 -->
 <html lang="en-NZ">
 <head>
@@ -84,7 +91,7 @@ body {
   font: 15px/1.5 "Instrument Sans", Arial, sans-serif;
   font-variant-numeric: tabular-nums;
 }
-.page { max-width: 72rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+.page { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
 .brand {
   display: flex;
   align-items: center;
@@ -103,124 +110,142 @@ body {
   text-transform: uppercase;
 }
 h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; }
-h1 { margin: 1.25rem 0 1rem; font-size: 2rem; line-height: 1.15; }
-h2 { margin: 0 0 0.4rem; font-size: 1.3rem; line-height: 1.25; }
-h3 { margin: 0; font-size: 1rem; line-height: 1.3; }
+h1 { margin: 0; font-size: 2rem; line-height: 1.15; }
+h2 { margin: 0; font-size: 1.15rem; line-height: 1.25; }
 p { margin: 0; }
-.facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.3rem 1.25rem;
-  margin: 0;
-  padding: 0.85rem 1rem;
-  background: var(--panel);
-  border-radius: 4px;
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 1.25rem 0 0.25rem;
 }
-.facts dt { font-weight: 600; color: var(--muted); }
-.facts dd { margin: 0; overflow-wrap: anywhere; }
-.view { margin-top: 1.75rem; }
-.view > .facts { margin-bottom: 1rem; }
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.tile { padding: 0.7rem 0.85rem; border: 1px solid var(--rule); border-radius: 4px; color: var(--muted); }
-.count { display: block; color: var(--text); font-size: 1.9rem; font-weight: 500; line-height: 1.15; }
-.tile.key .count { display: table; padding: 0 0.2em; background: var(--mark); color: var(--on-mark); }
+.asat, .lead, .sub { color: var(--muted); }
+h1, .lead, .known, .sub, .meta, .group, .quiet, .none, .fold > summary, .week > summary { overflow-wrap: anywhere; }
+.asat { font-size: 0.9rem; }
+.known { display: flex; flex-wrap: wrap; gap: 0.2rem 1.5rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.92rem; }
+.known strong { color: var(--text); font-weight: 600; }
+.partial { margin-top: 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--accent); background: var(--panel); }
+.summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 2rem; margin: 1.5rem 0 0.4rem; }
+.stat { color: var(--muted); }
+.stat strong { margin-right: 0.35rem; color: var(--text); font-size: 2rem; font-weight: 500; line-height: 1; }
+.stat.hot strong { color: var(--accent); }
+.stat.zero strong { color: var(--muted); font-weight: 400; }
+.week { margin-top: 0.9rem; color: var(--muted); }
+.week strong { color: var(--text); }
+.week > .body { padding-left: 0; }
 .part { margin-top: 2.25rem; }
-.lede { margin-bottom: 0.75rem; color: var(--muted); }
-.items { margin: 0; padding: 0; list-style: none; }
-.items > li { margin-bottom: 0.5rem; }
-.item { padding: 0.45rem 0 0.45rem 0.8rem; border-left: 3px solid var(--rule); }
-.item.late { border-left-color: var(--accent); }
-.item.late .when { color: var(--accent); font-weight: 700; }
-.item.today .when { padding: 0 0.2em; background: var(--mark); color: var(--on-mark); font-weight: 700; }
-.what { overflow-wrap: anywhere; }
-.meta { color: var(--muted); font-size: 0.9rem; }
-.where { margin-bottom: 0.1rem; color: var(--muted); font-size: 0.8rem; overflow-wrap: anywhere; }
-.none { color: var(--muted); font-style: italic; }
-.quiet { margin-top: 0.75rem; color: var(--muted); }
-.table-wrap { overflow-x: auto; }
-.projects { width: 100%; border-collapse: collapse; }
-.projects th, .projects td {
-  padding: 0.45rem 0.6rem;
-  border-bottom: 1px solid var(--rule);
-  text-align: left;
-  vertical-align: top;
-}
-.projects thead th {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.part > h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  padding-bottom: 0.4rem;
   border-bottom: 2px solid var(--text);
 }
-.projects .num { text-align: right; }
-.projects .late { color: var(--accent); font-weight: 700; }
-.projects tbody th { font-weight: 500; }
-.parent { color: var(--muted); font-weight: 400; }
-.status { display: block; margin-top: 0.1rem; color: var(--muted); font-size: 0.85rem; font-weight: 400; }
-.project {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem 1rem;
-  border: 1px solid var(--rule);
-  border-top: 3px solid var(--text);
-  border-radius: 4px;
+.n { color: var(--muted); font-size: 0.95rem; font-weight: 400; letter-spacing: 0; }
+.lede { margin: 0.5rem 0; color: var(--muted); }
+.rows { margin: 0; padding: 0; list-style: none; }
+.rows > li { border-bottom: 1px solid var(--rule); }
+summary { cursor: pointer; }
+.row > summary, .node > summary { list-style: none; }
+.row > summary::-webkit-details-marker, .node > summary::-webkit-details-marker { display: none; }
+.row > summary {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) auto;
+  gap: 0 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0.25rem;
 }
-.project > summary { cursor: pointer; font-size: 1.1rem; font-weight: 500; }
-.counts { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
-.purpose { margin: 0.35rem 0 0.5rem; color: var(--muted); }
-.group {
-  margin: 1rem 0 0.4rem;
+.row > summary:hover, .row[open] > summary { background: var(--panel); }
+.subj, .text { overflow-wrap: anywhere; }
+.by, .itself { color: var(--muted); font-weight: 400; }
+.side { max-width: 18rem; color: var(--muted); font-size: 0.85rem; text-align: right; overflow-wrap: anywhere; }
+.go { margin-top: 0.35rem; font-size: 0.85rem; }
+.jump { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 0.2em; }
+.jump:hover { text-decoration-color: var(--muted); }
+.more { padding: 0.25rem 0.25rem 0.75rem 8.25rem; background: var(--panel); }
+.more p + p { margin-top: 0.25rem; }
+.meta { color: var(--muted); font-size: 0.85rem; }
+.tag { justify-self: start; color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+.tag.late { color: var(--accent); font-weight: 700; }
+.tag.today { padding: 0 0.3em; background: var(--mark); color: var(--on-mark); font-weight: 700; }
+.tag.soon { color: var(--text); font-weight: 600; }
+.tag.age { color: var(--text); }
+.heads, .node > summary {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) 3rem 7.5rem 6.5rem;
+  gap: 0 0.75rem;
+  align-items: baseline;
+  padding: 0.55rem 0.25rem;
+}
+.heads {
+  padding: 0.35rem 0.25rem;
+  border-bottom: 1px solid var(--rule);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.accounts { margin: 0.35rem 0 0; padding-left: 1.3rem; }
-.two-ways > h2 { color: var(--accent); }
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
-  gap: 1rem;
-  align-items: start;
+.node { border-bottom: 1px solid var(--rule); }
+.node .node { border-bottom: 0; border-top: 1px solid var(--rule); }
+.node > summary::before { content: "\203A"; display: inline-block; color: var(--muted); transition: transform 0.15s; }
+.node[open] > summary::before { transform: rotate(90deg); }
+.node > summary:hover, .node:target > summary { background: var(--panel); }
+.pname { font-weight: 600; overflow-wrap: anywhere; }
+.parent > summary .pname { font-size: 1.05rem; }
+.status, .fact, .next { display: block; margin-top: 0.1rem; color: var(--muted); font-size: 0.88rem; font-weight: 400; overflow-wrap: anywhere; }
+.status { font-style: italic; }
+.fact .late, .known .late { color: var(--accent); font-weight: 700; }
+.num { text-align: right; }
+.last { color: var(--muted); }
+.body { padding: 0 0 0.5rem 1.75rem; }
+.group {
+  margin: 0.75rem 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
-.card { padding: 0.75rem 1rem 1rem; border: 1px solid var(--rule); border-top: 3px solid var(--text); border-radius: 4px; }
-.files { margin: 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
+.fold > summary { padding: 0.4rem 0; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.none, .quiet { margin-top: 0.6rem; color: var(--muted); }
+.none { font-style: italic; }
+.two-ways { padding: 0.75rem 1rem; border: 2px solid var(--accent); border-radius: 4px; }
+.pair { padding: 0.5rem 0; }
+.accounts { margin: 0.35rem 0 0; padding-left: 1.3rem; }
+.accounts > li + li { margin-top: 0.4rem; }
+.files { margin: 0.4rem 0 0; padding-left: 1.2rem; color: var(--muted); overflow-wrap: anywhere; }
+details.files { padding-left: 0; }
+.about { margin-top: 3rem; color: var(--muted); font-size: 0.85rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
 .foot {
-  margin-top: 3rem;
+  margin-top: 1rem;
   padding-top: 1rem;
   border-top: 2px solid var(--text);
   color: var(--muted);
   font-size: 0.85rem;
 }
 .foot p + p { margin-top: 0.4rem; }
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 @media (max-width: 40rem) {
   .page { padding: 1.25rem 0.9rem 2rem; }
   h1 { font-size: 1.6rem; }
+  .summary { gap: 0.5rem 1.25rem; }
+  .stat strong { font-size: 1.6rem; }
+  .row > summary { grid-template-columns: 5.5rem minmax(0, 1fr); }
+  .tag { white-space: normal; }
+  .side { grid-column: 2; max-width: none; text-align: left; }
+  .more { padding-left: 0.25rem; }
+  .heads { display: none; }
+  .node > summary { grid-template-columns: 1rem minmax(0, 1fr) auto; }
+  .node > summary .num, .node > summary .last { display: none; }
+  .body { padding-left: 0.75rem; }
   .facts { grid-template-columns: 1fr; }
-  .facts dd { margin-bottom: 0.35rem; }
-  .tiles { grid-template-columns: repeat(2, 1fr); }
-  .count { font-size: 1.5rem; }
-  .table-wrap { overflow: visible; }
-  .projects thead { display: none; }
-  .projects, .projects tbody, .projects tr, .projects tbody th { display: block; }
-  .projects tr { padding: 0.55rem 0; border-bottom: 1px solid var(--rule); }
-  .projects tbody th, .projects td { padding: 0; border: 0; }
-  .projects td { display: inline-block; margin: 0.2rem 1rem 0 0; }
-  .projects td::before { color: var(--muted); font-weight: 400; }
-  .projects td.owner::before { content: "Owner "; }
-  .projects td.target::before { content: "Target "; }
-  .projects td.open::before { content: "Open "; }
-  .projects td.overdue::before { content: "Overdue "; }
-  .projects td.due::before { content: "Earliest due "; }
-  .projects td.last::before { content: "Last recorded "; }
 }
 @media print {
   :root {
@@ -237,11 +262,12 @@ p { margin: 0; }
   @page { margin: 15mm; }
   body { font-size: 10.5pt; }
   .page { max-width: none; padding: 0; }
-  .facts { border: 1px solid var(--rule); }
-  .tile.key .count, .item.today .when { text-decoration: underline; }
-  .table-wrap { overflow: visible; }
-  .item, .tile, .projects tr, .facts { break-inside: avoid; }
-  h1, h2, h3, .group, summary { break-after: avoid; }
+  .node::details-content, .fold::details-content, .files::details-content { content-visibility: visible; display: block; }
+  .node > summary::before { content: ""; }
+  .tag.today { text-decoration: underline; }
+  .jump { text-decoration: none; }
+  .rows > li, .node > summary, .heads { break-inside: avoid; }
+  h1, h2, .group, summary { break-after: avoid; }
 }
 </style>
 </head>
@@ -253,333 +279,373 @@ p { margin: 0; }
 <p class="product">Pace by SBR</p>
 <svg class="wordmark" viewBox="0 0 714.2091 399.0466" role="img" aria-label="SBR"><path d="M641 -18Q549 -18 462.0 6.0Q375 30 275 81L206 0H144L105 507L188 520Q252 297 357.5 197.0Q463 97 638 97Q763 97 837.5 157.0Q912 217 912 322Q912 385 859.5 439.5Q807 494 679 556L518 636Q322 733 230.0 851.0Q138 969 138 1126Q138 1247 205.0 1341.5Q272 1436 386.5 1490.0Q501 1544 646 1544Q849 1544 994 1421L1041 1526H1107L1126 1088H1039Q990 1257 895.5 1342.0Q801 1427 656 1427Q554 1427 497.0 1377.0Q440 1327 440 1239Q440 1171 491.0 1117.5Q542 1064 668 1000L826 919Q1014 823 1096.5 708.0Q1179 593 1179 432Q1179 304 1108.0 202.0Q1037 100 915.0 41.0Q793 -18 641 -18Z" transform="translate(41.74993906897392,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H750Q900 1523 999.5 1503.5Q1099 1484 1166 1443Q1243 1394 1285.5 1318.0Q1328 1242 1328 1154Q1328 1034 1232.0 950.5Q1136 867 960 836V828Q1093 815 1193.0 758.0Q1293 701 1348.5 610.5Q1404 520 1404 404Q1404 313 1364.5 234.0Q1325 155 1257 104Q1181 48 1073.0 24.0Q965 0 786 0ZM744 105Q891 105 961.5 181.5Q1032 258 1032 421Q1032 595 942.0 676.5Q852 758 664 758H592V223Q592 153 624.5 129.0Q657 105 744 105ZM592 865H614Q649 865 674.5 866.5Q700 868 719 871Q838 883 902.0 953.5Q966 1024 966 1146Q966 1216 944.5 1267.0Q923 1318 883 1350Q840 1385 776.0 1400.5Q712 1416 628 1416H592Z" transform="translate(224.25054837923471,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><path d="M83 0V73L252 117V1409L83 1451V1523H797Q953 1523 1072.0 1473.5Q1191 1424 1258.0 1327.5Q1325 1231 1325 1090Q1325 946 1252.5 849.0Q1180 752 1049 705L1398 112L1515 73V0H1071L672 663H592V117L818 73V0ZM592 770H620Q727 770 793.0 799.0Q859 828 900 877Q944 926 962.0 986.5Q980 1047 980 1110Q980 1217 932.0 1288.5Q884 1360 807 1391Q773 1405 733.5 1410.5Q694 1416 633 1416H592Z" transform="translate(435.55934681940045,282.89056787716305) scale(0.14623446258835,-0.14623446258835)" fill="currentColor"/><rect x="57.10455764075067" y="310.64879356568366" width="600.0" height="7.3093833780160855" fill="currentColor"/><rect x="57.10455764075067" y="330.5211796246649" width="600.0" height="11.420911528150135" fill="currentColor"/></svg>
 </div>
-<h1>{{heading: Project overview, the project's name, or Work by person}}</h1>
-<dl class="facts">
-<dt>As at</dt>
-<dd>{{date, time and time zone, such as Friday 23 October 2026, 9:00 am NZDT}}</dd>
-<dt>Asked</dt>
-<dd>{{the question and its scope, such as Where does every project stand? Every project in Projects/.}}</dd>
-<dt>Searched</dt>
-<dd>{{what was actually searched, such as All 11 record files in Record/, each opened, with corrections and withdrawals followed to the current account; and the 4 projects in Projects/.}}</dd>
-<dt>Could not read</dt>
-<dd>{{anything that could not be opened or read, starting with Partial: when there is any; otherwise Nothing: every file listed was opened.}}</dd>
-</dl>
+<div class="title">
+<h1>{{heading: All projects, the project's name, or By person}}</h1>
+<p class="asat">As at {{date, time and time zone, such as Friday 23 October 2026, 9:00 am NZDT}}</p>
+</div>
+<!-- only in the one project view: its purpose, then what is known about it. Leave out Part of when it is not inside another project, and each of Owner, Target and Status that is not recorded; give the target the class "late" only when it has passed. -->
+<p class="lead">{{purpose, or Purpose not recorded}}</p>
+<p class="known"><span>Part of <strong>{{the projects above it, such as Kowhai Books &rsaquo; Budget 2027}}</strong></span><span>Owner <strong>{{who leads it, You for the owner, or Recorded two ways}}</strong></span><span>Target <strong class="late">{{target date and how late or how soon, such as 27 Nov 2026, in 28 days}}</strong></span><span>Status <strong>{{the status in its own words &middot; its date}}</strong></span><span>Last recorded <strong>{{date of the newest record for it or a project inside it, and how long ago}}</strong></span></p>
+<!-- only when anything could not be read -->
+<p class="partial">Partial: some files could not be read. They are named under Could not read at the end of this page.</p>
 </header>
 
 <!-- start: every project view -->
 <section class="view">
-<ul class="tiles">
-<!-- Give the class "tile key" to the overdue tile when anything is overdue; otherwise every tile is plain "tile". -->
-<li class="tile key"><span class="count">{{number}}</span> overdue</li>
-<li class="tile"><span class="count">{{number}}</span> due today</li>
-<li class="tile"><span class="count">{{number}}</span> due in the next 7 days</li>
-<li class="tile"><span class="count">{{number}}</span> waiting on you</li>
-<li class="tile"><span class="count">{{number}}</span> waiting on others</li>
-<li class="tile"><span class="count">{{number}}</span> with no due date</li>
+<div class="summary">
+<!-- Give the overdue line the class "stat hot" when anything is overdue. A line whose number is 0 gets "stat zero". -->
+<p class="stat hot"><strong>{{number}}</strong> overdue</p>
+<p class="stat"><strong>{{number}}</strong> due today</p>
+<p class="stat zero"><strong>{{number}}</strong> due in the next 7 days</p>
+</div>
+<p class="sub">{{open}} open in {{number}} projects &middot; {{number}} with you, {{number}} with others{{, N with no one named, only when there are any}} &middot; {{number}} with no due date{{ &middot; N recorded two ways, only when there are any}}</p>
+<!-- The last 7 days, today included. New: first recorded in them. Done and Cancelled: a current account saved in them with that state. Due date changed: an open item whose current account, saved in them, gives a different due date, or none, from the account it corrects; its "where" ends with &middot; was and the date it had, or was no date. Leave out each part that has none. When every part has none, write <p class="week">Last 7 days: nothing new, done, cancelled or with a changed due date.</p> instead of this block. -->
+<details class="week">
+<summary>Last 7 days: <strong>{{number}}</strong> new &middot; <strong>{{number}}</strong> done &middot; <strong>{{number}}</strong> cancelled &middot; <strong>{{number}}</strong> due dates changed</summary>
+<div class="body">
+<!-- repeat: one heading and its lines per part, in this order: New, Done, Cancelled, Due date changed. A done or cancelled line's tag is just <span class="tag">Done</span> or <span class="tag">Cancelled</span>. -->
+<p class="group">New</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
+</div>
+</details>
 <!-- only when an item is recorded two ways -->
 <section class="part two-ways">
-<h2>Recorded two ways</h2>
+<h2>Recorded two ways <span class="n">{{number}}</span></h2>
 <p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
-<ul class="items">
+<ul class="rows">
 <!-- repeat: one per item with two accounts -->
-<li>
-<p><strong>{{subject}}</strong> <span class="parent">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></p>
+<li class="pair">
+<p><strong>{{subject}}</strong> <span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></p>
 <ol class="accounts">
 <!-- repeat: one per account, in the order recorded -->
 <li class="item">
-<p class="what">{{this account's own text}}</p>
-<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
+<p class="text">{{this account's own text}}</p>
+<p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p>
 </li>
 </ol>
 </li>
 </ul>
 </section>
 <section class="part">
-<h2>Needs attention</h2>
-<p class="lede">Overdue, due today and due in the next 7 days, across every project.</p>
-<ul class="items">
-<!-- repeat: one per item; overdue first, the longest late first, then due today, then by due date. The class is "item late" when overdue, "item today" when due today, otherwise "item". -->
-<li class="item late">
-<p class="where">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date, such as 27 Nov 2026}} &middot; <span class="when">{{how late or how soon, such as 2 days late, today or in 3 days}}</span> &middot; {{state as recorded}}</p>
-</li>
+<h2>Needs attention <span class="n">{{number}}</span></h2>
+<!-- Overdue, due today and due in the next 7 days, across every project. When there is none, write <p class="none">Nothing is overdue or due in the next 7 days.</p> instead of the list. -->
+<ul class="rows">
+<!-- repeat: one line per item, overdue first, the longest late first, then due today, then by due date; inside, after the meta line, a jump to the project's row: #p- and the project's id, or #p-, the id and --own when the project has projects inside it, so the jump goes to the row of its own work. For this project's own work in its own page, the "where" is empty and the jump reads Go to its row -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p><p class="go"><a class="jump" href="#p-{{project id}}">Go to {{project, as in the line}}</a></p></div>
+</details></li>
 </ul>
 </section>
 <section class="part">
-<h2>Projects</h2>
-<p class="lede">Each project with open work, a target or a status, grouped under its parent, the most pressing first.</p>
-<div class="table-wrap">
-<table class="projects">
-<thead>
-<tr><th>Project</th><th>Owner</th><th>Target</th><th class="num">Open</th><th class="num">Overdue</th><th>Earliest due</th><th>Last recorded</th></tr>
-</thead>
-<tbody>
-<!-- repeat: one row per project with open work, a target or a status. Groups run most pressing first (the most overdue, then the earliest due date, then the most open work), judged by the most pressing work anywhere in the group; in a group, each project comes before the projects inside it, and projects side by side run most pressing first in the same way. Leave out the Owner column, its heading and its cells, when no project in the table has an owner; the same for Target. Owner, target and status come from the project's change records, as the add-in describes. The overdue cell's class is "num overdue late" when the number is more than 0, otherwise "num overdue". Earliest due is the earliest due date of the project's open work, overdue or not; its cell's class is "due late" when that date has passed, otherwise "due". The target cell's class is "target late" when the target has passed, otherwise "target". -->
-<tr><th><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, such as Kowhai Books &rsaquo;, or leave this span out}}</span> {{project's name}}<span class="status">{{only when it has a status: a space, then the status in its own words &middot; its date, or Recorded two ways; otherwise leave this span out}}</span></th><td class="owner">{{who leads it, You for the owner, Recorded two ways, or Not recorded}}</td><td class="target late">{{target date and how late or how soon, such as 27 Nov 2026, in 28 days, Recorded two ways, or Not recorded}}</td><td class="num open">{{open}}</td><td class="num overdue late">{{overdue}}</td><td class="due late">{{earliest due date and how late or how soon, such as 8 Oct 2026, 16 days late, or No due date}}</td><td class="last">{{date of the project's newest record and how long ago}}</td></tr>
-</tbody>
-</table>
+<h2>Projects <span class="n">{{number}} with open work, a target or a status</span></h2>
+<div class="heads"><span></span><span>Project and what is next</span><span class="num">Open</span><span>Next due</span><span>Last activity</span></div>
+<!-- repeat: one row per project at the top, most pressing first (the most overdue, then the earliest due date, then the most open work), judged by the work anywhere inside it; ties go by name. A project with projects inside it is a "node parent", open, as here. Any other project is a plain "node" row, closed, that opens to its own work, as below. -->
+<details class="node parent" id="p-{{project id}}" open>
+<summary><span class="label"><span class="pname">{{name}}</span><span class="status">{{only when it has a status: the status in its own words &middot; its date, or Recorded two ways; otherwise leave this span out}}</span><span class="fact">{{only when it has an owner or a target: Owner name (You for the owner) &middot; Target <span class="late">27 Nov 2026, 2 days late</span>; leave out what is not recorded, and give the target span the class "late" only when the target has passed}}</span><span class="next">{{Next: subject, when its most pressing open item has a due date, or Oldest open: subject; then &middot; the project inside it that holds the item, when another; then &middot; who owes it, when not the owner; then &middot; open 21 days, when undated and first recorded 14 or more days ago; or No open work recorded}}</span></span><span class="num">{{open, counting the projects inside it}}</span><span class="due">{{the earliest due date of its open work as a tag, such as <span class="tag late">2 days late</span>, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> with no open work}}</span><span class="last">{{its newest record, or the newest of it and the projects inside it: Today, Yesterday or 3 days ago}}</span></summary>
+<div class="body">
+<!-- only when it has open work of its own: a row for that work, named after it -->
+<details class="node own" id="p-{{project id}}--own">
+<summary><span class="label"><span class="pname">{{name}} <span class="itself">itself</span></span><span class="next">{{Next: subject, when its most pressing open item has a due date, or Oldest open: subject; then &middot; the project inside it that holds the item, when another; then &middot; who owes it, when not the owner; then &middot; open 21 days, when undated and first recorded 14 or more days ago; or No open work recorded}}</span></span><span class="num">{{open, counting the projects inside it}}</span><span class="due">{{the earliest due date of its open work as a tag, such as <span class="tag late">2 days late</span>, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> with no open work}}</span><span class="last">{{its newest record, or the newest of it and the projects inside it: Today, Yesterday or 3 days ago}}</span></summary>
+<div class="body">
+<!-- its own open work, overdue first, the longest late first, then due today, then by due date, then work with no due date in the order first recorded. When anyone but the owner owes any of it, put the lines under "With you", "With" and the person's name, and "No person named", in that order; otherwise use no heading. When it has no open work, write <p class="none">No open work recorded.</p> instead. -->
+<p class="group">With {{name}}</p>
+<ul class="rows">
+<!-- repeat: one line per item; these lines leave out the "by" span and the "side" text -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side"></span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
 </div>
+</details>
+<!-- repeat: each project inside it, most pressing first in the same way: a "node parent" like this one when it has projects inside it, otherwise a "node" row like this -->
+<details class="node" id="p-{{project id}}">
+<summary><span class="label"><span class="pname">{{name}}</span><span class="status">{{only when it has a status: the status in its own words &middot; its date, or Recorded two ways; otherwise leave this span out}}</span><span class="fact">{{only when it has an owner or a target: Owner name (You for the owner) &middot; Target <span class="late">27 Nov 2026, 2 days late</span>; leave out what is not recorded, and give the target span the class "late" only when the target has passed}}</span><span class="next">{{Next: subject, when its most pressing open item has a due date, or Oldest open: subject; then &middot; the project inside it that holds the item, when another; then &middot; who owes it, when not the owner; then &middot; open 21 days, when undated and first recorded 14 or more days ago; or No open work recorded}}</span></span><span class="num">{{open, counting the projects inside it}}</span><span class="due">{{the earliest due date of its open work as a tag, such as <span class="tag late">2 days late</span>, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> with no open work}}</span><span class="last">{{its newest record, or the newest of it and the projects inside it: Today, Yesterday or 3 days ago}}</span></summary>
+<div class="body">
+<!-- its own open work, overdue first, the longest late first, then due today, then by due date, then work with no due date in the order first recorded. When anyone but the owner owes any of it, put the lines under "With you", "With" and the person's name, and "No person named", in that order; otherwise use no heading. When it has no open work, write <p class="none">No open work recorded.</p> instead. -->
+<p class="group">With {{name}}</p>
+<ul class="rows">
+<!-- repeat: one line per item; these lines leave out the "by" span and the "side" text -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side"></span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+</div>
+</details>
 <!-- only when some projects have no open work, target or status, in them or in any project inside them -->
 <p class="quiet">No open work recorded: {{those projects' names}}.</p>
-<!-- only when Projects/ holds folders with no Pace project.md -->
+<!-- only when 1 Projects/ holds folders with no Pace project.md -->
 <p class="quiet">Folders with no Pace project.md: {{their places}}. Ask the owner what each one is.</p>
-</section>
-<section class="part">
-<h2>Open work by project</h2>
-<!-- repeat: one per project with open work, in the same order as the table -->
-<details class="project" open>
-<summary><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, or leave this span out}}</span> {{project's name}} <span class="counts">{{counts, such as 3 open &middot; 1 overdue}}</span></summary>
-<p class="purpose">{{purpose, or Purpose not recorded}}</p>
-<!-- only when the owner owes something here -->
-<h3 class="group">Waiting on you</h3>
-<ul class="items">
-<!-- repeat: one per item the owner owes; overdue first, then due today, then by due date, then those with no due date, in the order first recorded -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">Owed by you &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-<!-- only when someone else owes something here -->
-<h3 class="group">Waiting on others</h3>
-<ul class="items">
-<!-- repeat: one per item someone else owes, in the same order -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">Owed by {{name}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-<!-- only when some open work here names no one -->
-<h3 class="group">No person named</h3>
-<ul class="items">
-<!-- repeat: one per item that names no one, in the same order -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-</details>
 </section>
 </section>
 <!-- end: every project view -->
 
 <!-- start: one project view -->
 <section class="view">
-<dl class="facts">
-<dt>Purpose</dt>
-<dd>{{purpose, or Purpose not recorded}}</dd>
-<dt>Owner</dt>
-<dd>{{who leads it, You for the owner, Recorded two ways, or Not recorded}}</dd>
-<dt>Target</dt>
-<dd>{{target date and how late or how soon, Recorded two ways, or Not recorded}}</dd>
-<dt>Status</dt>
-<dd>{{the status in its own words &middot; its date, Recorded two ways, or Not recorded}}</dd>
-<dt>Part of</dt>
-<dd>{{the projects above it, such as Kowhai Books, or Kowhai Books &rsaquo; Budget 2027 further down, or Not part of another project}}</dd>
-<dt>Projects inside it</dt>
-<dd>{{every project inside it at any depth, each after the names of any between, such as Budget 2027, Budget 2027 &rsaquo; Board pack, or None}}</dd>
-<dt>Last recorded</dt>
-<dd>{{date of the newest record for it or a project inside it, and how long ago}}</dd>
-</dl>
-<ul class="tiles">
-<!-- the same six tiles as the every project view, counting this project and the projects inside it -->
-<li class="tile key"><span class="count">{{number}}</span> overdue</li>
-<li class="tile"><span class="count">{{number}}</span> due today</li>
-<li class="tile"><span class="count">{{number}}</span> due in the next 7 days</li>
-<li class="tile"><span class="count">{{number}}</span> waiting on you</li>
-<li class="tile"><span class="count">{{number}}</span> waiting on others</li>
-<li class="tile"><span class="count">{{number}}</span> with no due date</li>
+<!-- the same counts, Last 7 days and Recorded two ways as the every project view, for this project and the projects inside it -->
+<div class="summary">
+<!-- Give the overdue line the class "stat hot" when anything is overdue. A line whose number is 0 gets "stat zero". -->
+<p class="stat hot"><strong>{{number}}</strong> overdue</p>
+<p class="stat"><strong>{{number}}</strong> due today</p>
+<p class="stat zero"><strong>{{number}}</strong> due in the next 7 days</p>
+</div>
+<p class="sub">{{open}} open in {{number}} projects &middot; {{number}} with you, {{number}} with others{{, N with no one named, only when there are any}} &middot; {{number}} with no due date{{ &middot; N recorded two ways, only when there are any}}</p>
+<!-- The last 7 days, today included. New: first recorded in them. Done and Cancelled: a current account saved in them with that state. Due date changed: an open item whose current account, saved in them, gives a different due date, or none, from the account it corrects; its "where" ends with &middot; was and the date it had, or was no date. Leave out each part that has none. When every part has none, write <p class="week">Last 7 days: nothing new, done, cancelled or with a changed due date.</p> instead of this block. -->
+<details class="week">
+<summary>Last 7 days: <strong>{{number}}</strong> new &middot; <strong>{{number}}</strong> done &middot; <strong>{{number}}</strong> cancelled &middot; <strong>{{number}}</strong> due dates changed</summary>
+<div class="body">
+<!-- repeat: one heading and its lines per part, in this order: New, Done, Cancelled, Due date changed. A done or cancelled line's tag is just <span class="tag">Done</span> or <span class="tag">Cancelled</span>. -->
+<p class="group">New</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
-<!-- only when an item is recorded two ways: the same block as the every project view -->
+</div>
+</details>
+<!-- only when an item is recorded two ways -->
 <section class="part two-ways">
-<h2>Recorded two ways</h2>
+<h2>Recorded two ways <span class="n">{{number}}</span></h2>
 <p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
-<ul class="items">
-<li>
-<p><strong>{{subject}}</strong> <span class="parent">{{project}}</span></p>
+<ul class="rows">
+<!-- repeat: one per item with two accounts -->
+<li class="pair">
+<p><strong>{{subject}}</strong> <span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></p>
 <ol class="accounts">
+<!-- repeat: one per account, in the order recorded -->
 <li class="item">
-<p class="what">{{this account's own text}}</p>
-<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
+<p class="text">{{this account's own text}}</p>
+<p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p>
 </li>
 </ol>
 </li>
 </ul>
 </section>
+<!-- When a project inside it has open work, a target or a status, use this Needs attention, with its jumps, and the Projects section. Otherwise use the Needs attention without jumps and the Open work section further down. Its "where" names a project inside it from below this one, and is left empty for this project's own work. -->
 <section class="part">
-<h2>Needs attention</h2>
-<p class="lede">Overdue, due today and due in the next 7 days, in this project and the projects inside it.</p>
-<ul class="items">
-<!-- repeat: the same items, in the same order, as the every project view's Needs attention, for this project and the projects inside it -->
-<li class="item late">
-<p class="where">{{project}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
+<h2>Needs attention <span class="n">{{number}}</span></h2>
+<!-- Overdue, due today and due in the next 7 days, in this project and the projects inside it. When there is none, write <p class="none">Nothing is overdue or due in the next 7 days.</p> instead of the list. -->
+<ul class="rows">
+<!-- repeat: one line per item, overdue first, the longest late first, then due today, then by due date; inside, after the meta line, a jump to the project's row: #p- and the project's id, or #p-, the id and --own when the project has projects inside it, so the jump goes to the row of its own work. For this project's own work in its own page, the "where" is empty and the jump reads Go to its row -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p><p class="go"><a class="jump" href="#p-{{project id}}">Go to {{project, as in the line}}</a></p></div>
+</details></li>
 </ul>
 </section>
-<!-- only when a project inside it has open work, a target or a status -->
 <section class="part">
-<h2>Projects</h2>
-<p class="lede">This project and the projects inside it that have open work, a target or a status, the most pressing first.</p>
-<div class="table-wrap">
-<table class="projects">
-<thead>
-<tr><th>Project</th><th>Owner</th><th>Target</th><th class="num">Open</th><th class="num">Overdue</th><th>Earliest due</th><th>Last recorded</th></tr>
-</thead>
-<tbody>
-<!-- repeat: the same rows as the every project view's table, for this project and the projects inside it, in the same order -->
-<tr><th><span class="parent">{{the names of the projects above it, each followed by &rsaquo;, or leave this span out}}</span> {{project's name}}<span class="status">{{only when it has a status: a space, then the status &middot; its date, or Recorded two ways; otherwise leave this span out}}</span></th><td class="owner">{{who leads it, Recorded two ways, or Not recorded}}</td><td class="target late">{{target date and how late or how soon, Recorded two ways, or Not recorded}}</td><td class="num open">{{open}}</td><td class="num overdue late">{{overdue}}</td><td class="due late">{{earliest due date and how late or how soon, or No due date}}</td><td class="last">{{date of the project's newest record and how long ago}}</td></tr>
-</tbody>
-</table>
+<h2>Projects <span class="n">{{number}} inside with open work, a target or a status</span></h2>
+<div class="heads"><span></span><span>Project and what is next</span><span class="num">Open</span><span>Next due</span><span>Last activity</span></div>
+<!-- only when this project has open work of its own -->
+<details class="node own" id="p-{{project id}}--own">
+<summary><span class="label"><span class="pname">{{name}} <span class="itself">itself</span></span><span class="next">{{Next: subject, when its most pressing open item has a due date, or Oldest open: subject; then &middot; the project inside it that holds the item, when another; then &middot; who owes it, when not the owner; then &middot; open 21 days, when undated and first recorded 14 or more days ago; or No open work recorded}}</span></span><span class="num">{{open, counting the projects inside it}}</span><span class="due">{{the earliest due date of its open work as a tag, such as <span class="tag late">2 days late</span>, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> with no open work}}</span><span class="last">{{its newest record, or the newest of it and the projects inside it: Today, Yesterday or 3 days ago}}</span></summary>
+<div class="body">
+<!-- its own open work, overdue first, the longest late first, then due today, then by due date, then work with no due date in the order first recorded. When anyone but the owner owes any of it, put the lines under "With you", "With" and the person's name, and "No person named", in that order; otherwise use no heading. When it has no open work, write <p class="none">No open work recorded.</p> instead. -->
+<p class="group">With {{name}}</p>
+<ul class="rows">
+<!-- repeat: one line per item; these lines leave out the "by" span and the "side" text -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side"></span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
 </div>
+</details>
+<!-- repeat: each project inside it, as the every project view's rows -->
+<details class="node" id="p-{{project id}}">
+<summary><span class="label"><span class="pname">{{name}}</span><span class="status">{{only when it has a status: the status in its own words &middot; its date, or Recorded two ways; otherwise leave this span out}}</span><span class="fact">{{only when it has an owner or a target: Owner name (You for the owner) &middot; Target <span class="late">27 Nov 2026, 2 days late</span>; leave out what is not recorded, and give the target span the class "late" only when the target has passed}}</span><span class="next">{{Next: subject, when its most pressing open item has a due date, or Oldest open: subject; then &middot; the project inside it that holds the item, when another; then &middot; who owes it, when not the owner; then &middot; open 21 days, when undated and first recorded 14 or more days ago; or No open work recorded}}</span></span><span class="num">{{open, counting the projects inside it}}</span><span class="due">{{the earliest due date of its open work as a tag, such as <span class="tag late">2 days late</span>, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> with no open work}}</span><span class="last">{{its newest record, or the newest of it and the projects inside it: Today, Yesterday or 3 days ago}}</span></summary>
+<div class="body">
+<!-- its own open work, overdue first, the longest late first, then due today, then by due date, then work with no due date in the order first recorded. When anyone but the owner owes any of it, put the lines under "With you", "With" and the person's name, and "No person named", in that order; otherwise use no heading. When it has no open work, write <p class="none">No open work recorded.</p> instead. -->
+<p class="group">With {{name}}</p>
+<ul class="rows">
+<!-- repeat: one line per item; these lines leave out the "by" span and the "side" text -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side"></span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+<!-- only when some projects inside it have no open work, target or status -->
+<p class="quiet">No open work recorded: {{those projects' names, from below this one}}.</p>
 </section>
 <section class="part">
-<h2>Open work</h2>
-<!-- the same three groups and order as a project in the every project view; when a project inside it holds the item, in any group, name that project in a "where" line above the subject -->
-<h3 class="group">Waiting on you</h3>
-<ul class="items">
-<li class="item">
-<!-- only when a project inside it holds the item -->
-<p class="where">{{project inside it, such as Kowhai Books &rsaquo; Budget 2027}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">Owed by you &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-<h3 class="group">Waiting on others</h3>
-<ul class="items">
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">Owed by {{name}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-<h3 class="group">No person named</h3>
-<ul class="items">
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
-</ul>
-</section>
-<section class="part">
-<h2>Decided in the last three weeks</h2>
-<ul class="items">
-<!-- repeat: one per decision record, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}} &middot; {{From you, or from whom}}</p>
-</li>
+<h2>Needs attention <span class="n">{{number}}</span></h2>
+<!-- Overdue, due today and due in the next 7 days, in this project. When there is none, write <p class="none">Nothing is overdue or due in the next 7 days.</p> instead of the list. -->
+<ul class="rows">
+<!-- repeat: one line per item, overdue first, the longest late first, then due today, then by due date -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
 </section>
 <section class="part">
-<h2>Changed in the last three weeks</h2>
-<ul class="items">
-<!-- repeat: one per change record, such as a new owner, scope or date for the project, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}} &middot; {{From you, or from whom}}</p>
-</li>
+<h2>Open work <span class="n">{{number}}</span></h2>
+<!-- its own open work, overdue first, the longest late first, then due today, then by due date, then work with no due date in the order first recorded. When anyone but the owner owes any of it, put the lines under "With you", "With" and the person's name, and "No person named", in that order; otherwise use no heading. When it has no open work, write <p class="none">No open work recorded.</p> instead. -->
+<p class="group">With {{name}}</p>
+<ul class="rows">
+<!-- repeat: one line per item; these lines leave out the "by" span and the "side" text -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side"></span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
 </section>
+<!-- only when anything was recorded for it or a project inside it in the last three weeks -->
 <section class="part">
-<h2>Done in the last three weeks</h2>
-<ul class="items">
-<!-- repeat: one per item whose current account is done, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}} &middot; {{state as recorded}}</p>
-</li>
+<h2>Last three weeks <span class="n">{{number}}</span></h2>
+<ul class="rows">
+<!-- repeat: one line per decision, change, done or cancelled item, and note, newest first. The tag is Decided, Changed, Done, Cancelled or Note. The "where" names a project inside it, then &middot;, then the date, such as 25 Oct. Inside: the record's own text, then its date and From you or from whom for a decision or change, or its state for done and cancelled. -->
+<li class="item"><details class="row">
+<summary><span class="tag">{{Decided, Changed, Done, Cancelled or Note}}</span><span class="subj">{{subject}}</span><span class="side">{{project inside it &middot;, then the date}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{date recorded, such as 25 Oct 2026}} &middot; {{From you, From name, or the state}}</p></div>
+</details></li>
 </ul>
 </section>
-<section class="part">
-<h2>Cancelled in the last three weeks</h2>
-<ul class="items">
-<!-- repeat: one per item whose current account is cancelled, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}} &middot; {{state as recorded}}</p>
-</li>
-</ul>
-</section>
-<section class="part">
-<h2>Notes from the last three weeks</h2>
-<ul class="items">
-<!-- repeat: one per note, newest first -->
-<li class="item">
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{date recorded}}</p>
-</li>
-</ul>
-</section>
-<section class="part">
-<h2>Documents and repository references</h2>
+<section class="part refs">
+<!-- When it has none, write <p class="quiet">Documents and repository references: none.</p> instead. -->
+<details class="files">
+<summary>Documents and repository references <span class="n">{{number}}</span></summary>
 <ul class="files">
 <!-- repeat: one per folder or file at the top of the project's Documents/, and one per repository reference, by its place in the Pace folder -->
-<li>{{place, such as Projects/Kowhai Books/Budget 2027/Documents/Deliverables}}</li>
+<li>{{place, such as 1 Projects/Kowhai Books/Budget 2027/Documents/Deliverables}}</li>
 </ul>
+</details>
 </section>
 </section>
 <!-- end: one project view -->
 
 <!-- start: by person view -->
 <section class="view">
-<!-- only when an item is recorded two ways: the same block as the every project view -->
+<!-- the same counts, Last 7 days, Recorded two ways and Needs attention, without jumps, as the every project view -->
+<div class="summary">
+<!-- Give the overdue line the class "stat hot" when anything is overdue. A line whose number is 0 gets "stat zero". -->
+<p class="stat hot"><strong>{{number}}</strong> overdue</p>
+<p class="stat"><strong>{{number}}</strong> due today</p>
+<p class="stat zero"><strong>{{number}}</strong> due in the next 7 days</p>
+</div>
+<p class="sub">{{open}} open in {{number}} projects &middot; {{number}} with you, {{number}} with others{{, N with no one named, only when there are any}} &middot; {{number}} with no due date{{ &middot; N recorded two ways, only when there are any}}</p>
+<!-- The last 7 days, today included. New: first recorded in them. Done and Cancelled: a current account saved in them with that state. Due date changed: an open item whose current account, saved in them, gives a different due date, or none, from the account it corrects; its "where" ends with &middot; was and the date it had, or was no date. Leave out each part that has none. When every part has none, write <p class="week">Last 7 days: nothing new, done, cancelled or with a changed due date.</p> instead of this block. -->
+<details class="week">
+<summary>Last 7 days: <strong>{{number}}</strong> new &middot; <strong>{{number}}</strong> done &middot; <strong>{{number}}</strong> cancelled &middot; <strong>{{number}}</strong> due dates changed</summary>
+<div class="body">
+<!-- repeat: one heading and its lines per part, in this order: New, Done, Cancelled, Due date changed. A done or cancelled line's tag is just <span class="tag">Done</span> or <span class="tag">Cancelled</span>. -->
+<p class="group">New</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+<!-- only when an item is recorded two ways -->
 <section class="part two-ways">
-<h2>Recorded two ways</h2>
+<h2>Recorded two ways <span class="n">{{number}}</span></h2>
 <p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
-<ul class="items">
-<li>
-<p><strong>{{subject}}</strong> <span class="parent">{{project}}</span></p>
+<ul class="rows">
+<!-- repeat: one per item with two accounts -->
+<li class="pair">
+<p><strong>{{subject}}</strong> <span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></p>
 <ol class="accounts">
+<!-- repeat: one per account, in the order recorded -->
 <li class="item">
-<p class="what">{{this account's own text}}</p>
-<p class="meta">{{Owed by you, Owed by name, or Owed by: not recorded}} &middot; due {{date}} &middot; {{state as recorded}}</p>
+<p class="text">{{this account's own text}}</p>
+<p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p>
 </li>
 </ol>
 </li>
 </ul>
 </section>
-<div class="cards">
-<!-- repeat: one card per person, you first, then by name -->
-<article class="card">
-<h2>{{person's name, or You}}</h2>
-<h3 class="group">Owes</h3>
-<ul class="items">
-<!-- repeat: one per open item this person owes; overdue first, then by due date, then those with no due date -->
-<li class="item">
-<p class="where">{{project}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{For whom, then &middot;, such as For Ana Ruiz &middot;, or leave it out when the record names no one}} due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
+<section class="part">
+<h2>Needs attention <span class="n">{{number}}</span></h2>
+<!-- Overdue, due today and due in the next 7 days, across every project. When there is none, write <p class="none">Nothing is overdue or due in the next 7 days.</p> instead of the list. -->
+<ul class="rows">
+<!-- repeat: one line per item, overdue first, the longest late first, then due today, then by due date -->
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project, such as Kowhai Books &rsaquo; Budget 2027}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
-<h3 class="group">Waiting for</h3>
-<ul class="items">
-<!-- repeat: one per open item someone owes this person, in the same order -->
-<li class="item">
-<p class="where">{{project}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">{{Owed by name, or Owed by you}} &middot; due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
+</section>
+<section class="part">
+<h2>People <span class="n">{{number}}</span></h2>
+<div class="heads"><span></span><span>Person and what is next</span><span class="num">Owes</span><span>Next due</span><span>{{Waiting for, only when anyone is waiting for something; otherwise leave the span empty}}</span></div>
+<!-- repeat: one row per person who owes something or is waiting for something, you first, then by name. The owner's row is open; every other row is closed. -->
+<details class="node person" open>
+<summary><span class="label"><span class="pname">{{You, or the person's name}}</span><span class="next">{{Next: subject &middot; project, when their most pressing item has a due date, or Oldest open: subject &middot; project, or Owes nothing recorded}}</span></span><span class="num">{{how many they owe}}</span><span class="due">{{the earliest due date of what they owe as a tag, or <span class="tag empty">No date</span>, or <span class="tag empty">None</span> when they owe nothing}}</span><span class="last">{{how many items they are waiting for, or leave it empty}}</span></summary>
+<div class="body">
+<!-- only when they owe something with a due date; "You owe" for the owner, "Owes" for anyone else. Each line's "where" is its project, then &middot; for whom when the record says. -->
+<p class="group">{{You owe or Owes}}, with a due date</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
-</article>
-<!-- only when some open work names no one who owes it -->
-<article class="card">
-<h2>No person named</h2>
-<ul class="items">
-<li class="item">
-<p class="where">{{project}}</p>
-<p class="what"><strong>{{subject}}</strong> {{the record's own text}}</p>
-<p class="meta">due {{date}} &middot; <span class="when">{{how late or how soon}}</span> &middot; {{state as recorded}}</p>
-</li>
+<!-- only when they owe something with no due date. When they owe more than 10 items in all, fold this work by the project at the top of each item's folders, one block per project, as below, naming in each line's "where" only the projects below that one; otherwise use one heading, <p class="group">You owe, with no due date</p>, and its lines. -->
+<details class="fold">
+<summary>{{You owe or Owes}}, with no due date: {{project at the top}} <span class="n">{{number}}</span></summary>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{the projects below it, or leave empty}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
 </ul>
-</article>
+</details>
+<!-- only when someone owes them something; "You are waiting for" for the owner, "Waiting for" for anyone else. Each line's "where" is its project, then &middot; from and who owes it. -->
+<p class="group">{{You are waiting for or Waiting for}}</p>
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project}} &middot; from {{name, or you}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
 </div>
+</details>
+<!-- only when some open work names no one who owes it -->
+<details class="node person">
+<summary><span class="label"><span class="pname">No person named</span><span class="next">Open work that names no one who owes it</span></span><span class="num">{{number}}</span><span class="due"></span><span class="last"></span></summary>
+<div class="body">
+<ul class="rows">
+<li class="item"><details class="row">
+<summary><span class="tag late">{{the tag: how late or soon, or how long undated work has waited}}</span><span class="subj">{{subject}}<span class="by"> &middot; {{who owes it, only when not the owner; otherwise leave this span out}}</span></span><span class="side">{{project}}</span></summary>
+<div class="more"><p class="text">{{the record's own text}}</p><p class="meta">{{Owed by you, Owed by name, or No person named}} &middot; {{for whom, such as for Ana Ruiz, only when the record says; otherwise leave it and its &middot; out}} &middot; due {{date, such as 27 Nov 2026, or write no due date}} &middot; {{state as recorded, or state not recorded}}</p></div>
+</details></li>
+</ul>
+</div>
+</details>
+</section>
 </section>
 <!-- end: by person view -->
 
+<section class="about">
+<dl class="facts">
+<dt>Asked</dt>
+<dd>{{the question and its scope, such as Where does every project stand? Every project in 1 Projects/.}}</dd>
+<dt>Searched</dt>
+<dd>{{what was actually searched, such as All 11 record files in Record/, each opened, with corrections and withdrawals followed to the current account; and the 4 projects in 1 Projects/.}}</dd>
+<dt>Could not read</dt>
+<dd>{{anything that could not be opened or read, starting with Partial: when there is any; otherwise Nothing: every file listed was opened.}}</dd>
+<!-- only when Record/ holds a leftover copy of a record that saved: a save's temporary file whose record is beside it and reads the same. It holds nothing the record does not, so it does not make the page partial. -->
+<dt>Housekeeping</dt>
+<dd>{{each such file, such as Record/.pace-tmp-... is a leftover copy of Record/... from a save that finished; the record reads the same.}}</dd>
+</dl>
+</section>
+
 <footer class="foot">
-<p>A dated snapshot made from the records. It is not a record, it changes nothing and it is never edited: the records in Record/ stand. For a newer picture, make a new page; to put something right, save a correction in Record/.</p>
+<p>A dated snapshot made from the records. It is not a record, it changes nothing and it is never edited: the records in Record/ stand. Open any line for its full wording. For a newer picture, make a new page; to put something right, save a correction in Record/.</p>
 <p>Pace by SBR</p>
 </footer>
 

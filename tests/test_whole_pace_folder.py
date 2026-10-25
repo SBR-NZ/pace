@@ -57,11 +57,11 @@ class WholePaceFolderTest(unittest.TestCase):
                 if target and not re.match(r"^[a-z]+://", target) and not (page.parent / target).is_file():
                     broken.append((page.relative_to(ROOT).as_posix(), target))
         self.assertEqual(broken, [])
-        # Projects live in Projects/, each with its files in Documents/; the older names appear nowhere in either folder.
+        # Projects live in 1 Projects/, each with its files in Documents/; the older names appear nowhere in either folder.
         for root in (PACE_FOLDER, EXAMPLE):
-            self.assertTrue((root / "Projects").is_dir())
+            self.assertTrue((root / "1 Projects").is_dir())
             self.assertFalse((root / "Project files").exists())
-            self.assertIn("- `Projects/` - projects, each with its files in `Documents/`;", (root / "Pace.md").read_text(encoding="utf-8"))
+            self.assertIn("- `1 Projects/` - projects, each with its files in `Documents/`.", (root / "Pace.md").read_text(encoding="utf-8"))
             stale = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
                            if p.is_file() and "__pycache__" not in p.parts
                            and re.search(rb"(?i)project files|working files", p.read_bytes()))
@@ -85,10 +85,10 @@ class WholePaceFolderTest(unittest.TestCase):
         # Neither Pace.md describes its folders as an "empty template": that wording is wrong once an owner's folders fill up.
         for root in (PACE_FOLDER, EXAMPLE):
             self.assertNotIn("empty template", (root / "Pace.md").read_text(encoding="utf-8").lower(), f"{root.name}/Pace.md")
-        # Owner add-ins sit in a top-level My add-ins/ beside Product/; the older place is named only where help explains it.
+        # Owner add-ins sit in a top-level 3 My add-ins/ beside Product/; the older place is named only where help explains it.
         for root in (PACE_FOLDER, EXAMPLE):
-            self.assertIn("- `My add-ins/` - owner-made or customised add-ins", (root / "Pace.md").read_text(encoding="utf-8"))
-            self.assertEqual((root / "My add-ins/.gitkeep").read_bytes(), b"")
+            self.assertIn("- `3 My add-ins/` - owner-made or customised add-ins", (root / "Pace.md").read_text(encoding="utf-8"))
+            self.assertEqual((root / "3 My add-ins/.gitkeep").read_bytes(), b"")
             self.assertFalse((root / "Pace").exists())
             mentions = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
                               if p.is_file() and b"Pace/Add-ins" in p.read_bytes())
@@ -102,8 +102,8 @@ class WholePaceFolderTest(unittest.TestCase):
         release_note = (EXAMPLE / "Release record/Invented release record.md").read_text(encoding="utf-8")
         self.assertIn(pu.file_list_digest(pu.read_tree(EXAMPLE / "Product")), release_note)
         self.assertIn("proposed, not installed", release_note)
-        self.assertTrue((EXAMPLE / "Views/2026-10-23-open-work.md").is_file())
-        self.assertIn("record creation", (EXAMPLE / "Views/2026-10-23-year-2026.md").read_text())
+        self.assertTrue((EXAMPLE / "2 Views/2026-10-23-open-work.md").is_file())
+        self.assertIn("record creation", (EXAMPLE / "2 Views/2026-10-23-year-2026.md").read_text())
 
         def record(*args):
             done = subprocess.run([sys.executable, str(RECORD_TOOL), "--pace", str(EXAMPLE), *args],

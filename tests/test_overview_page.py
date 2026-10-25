@@ -28,7 +28,7 @@ ADD_IN = ROOT / "PACE" / ADD_IN_FOLDER / "ADD-IN.md"
 TOOL = ROOT / "PACE/Product/Tools/pace_overview.py"
 HOSTS_HELP = ROOT / "PACE/Product/Help/hosts-and-views.md"
 EXAMPLE = ROOT / "example"
-EXAMPLE_PAGE = EXAMPLE / "Views/2026-10-30-project-overview.html"
+EXAMPLE_PAGE = EXAMPLE / "2 Views/2026-10-30-project-overview.html"
 EXAMPLE_AS_AT = "2026-10-30T09:00:00+13:00"
 
 _spec = importlib.util.spec_from_file_location("pace_record", ROOT / "PACE/Product/Tools/pace_record.py")
@@ -40,7 +40,7 @@ _spec.loader.exec_module(po)
 
 PRODUCT_NAME = "Pace by SBR"
 VIEWS = ("every project", "one project", "by person")
-FACTS = ("As at", "Asked", "Searched", "Could not read")
+ABOUT = ("Asked", "Searched", "Could not read")
 # SBR brand kit edition 02: plum, citron, warm paper, stone and olive, with tints of them for panels and quiet text.
 BRAND = {"#35293d", "#dbf36b", "#faf6f0", "#e9e0d8", "#4f5c10"}
 TINTS = {"#f2ebe2", "#5e5068", "#3f3248", "#c9bad6", "#5a4a66", "#ffffff", "#4b3f55", "#b5a79a"}
@@ -48,7 +48,8 @@ TINTS = {"#f2ebe2", "#5e5068", "#3f3248", "#c9bad6", "#5a4a66", "#ffffff", "#4b3
 # Everything a page may contain. No element or attribute here can run code or fetch anything.
 COMMON_ATTRIBUTES = {"lang", "charset", "name", "content", "class"}
 TAG_ATTRIBUTES = {
-    "details": {"class", "open"},
+    "details": {"class", "open", "id"},
+    "a": {"class", "href"},
     "svg": {"class", "viewbox", "role", "aria-label"},
     "path": {"d", "transform", "fill"},
     "rect": {"x", "y", "width", "height", "fill"},
@@ -56,15 +57,17 @@ TAG_ATTRIBUTES = {
 ALLOWED_TAGS = {
     "html", "head", "meta", "title", "style", "body", "main", "header", "footer", "section",
     "article", "div", "h1", "h2", "h3", "p", "dl", "dt", "dd", "ul", "ol", "li", "strong", "span",
-    "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "path", "rect",
+    "details", "summary", "svg", "path", "rect", "a",
 }
 VOID = {"meta"}
 SVG_CHILDREN = {"path", "rect"}
-PHRASING = {"strong", "span"}
+PHRASING = {"strong", "span", "a"}
 HEAD_CHILDREN = {"meta", "title", "style"}
 FORBIDDEN = re.compile(
-    r"<\s*(?:script|link|img|iframe|frame|object|embed|base|form|input|button|math|video|audio|source|picture|image|use|foreignobject|a)\b"
-    r"|\b(?:src|href|xlink:href|srcset|action|style)\s*="
+    r"<\s*(?:script|link|img|iframe|frame|object|embed|base|form|input|button|math|video|audio|source|picture|image|use|foreignobject)\b"
+    r"|<\s*a\b(?! class=\"jump\" href=\"#p-(?:[a-z0-9-]+|\{\{project id\}\}(?:--own)?)\">)"
+    r"|\b(?:src|xlink:href|srcset|action|style)\s*="
+    r"|\bhref\s*=(?!\"#p-(?:[a-z0-9-]+|\{\{project id\}\}(?:--own)?)\">)"
     r"|\bon[a-z]+\s*="
     r"|url\s*\(|@import|@font-face|://|http-equiv|javascript:",
     re.I,
@@ -97,6 +100,8 @@ class Page(HTMLParser):
         self.style = ""
         self.items = []
         self.text = []
+        self.ids = []
+        self.jumps = []
         self._stack = []
         self._open_items = []
         self._details_children = []
@@ -104,6 +109,12 @@ class Page(HTMLParser):
         self.close()
         if self._stack:
             self.problems.append(f"not closed: {[tag for tag, _ in self._stack]}")
+        made = [ident for ident in self.ids if "{{" not in ident]  # a template's placeholders repeat by design
+        if len(set(made)) != len(made):
+            self.problems.append("an id is used twice")
+        missing = sorted(set(jump[1:] for jump in self.jumps if "{{" not in jump) - set(made))
+        if missing:
+            self.problems.append(f"a jump to no row: {missing}")
 
     def classes(self):
         return {name for _, attrs in self.tags for name in attrs.get("class", "").split()}
@@ -140,18 +151,6 @@ class Page(HTMLParser):
             self.problems.append(f"li inside {parent}")
         if tag in ("dt", "dd") and parent != "dl":
             self.problems.append(f"{tag} inside {parent}")
-        if parent == "table" and tag not in ("thead", "tbody"):
-            self.problems.append(f"{tag} directly inside table")
-        if tag in ("thead", "tbody") and parent != "table":
-            self.problems.append(f"{tag} inside {parent}")
-        if parent in ("thead", "tbody") and tag != "tr":
-            self.problems.append(f"{tag} directly inside {parent}")
-        if tag == "tr" and parent not in ("thead", "tbody"):
-            self.problems.append(f"tr inside {parent}")
-        if tag in ("th", "td") and parent != "tr":
-            self.problems.append(f"{tag} inside {parent}")
-        if parent == "tr" and tag not in ("th", "td"):
-            self.problems.append(f"{tag} directly inside tr")
         if (tag in SVG_CHILDREN) != (parent == "svg"):
             self.problems.append(f"{tag} inside {parent}")
         if tag == "svg" and parent != "div":
@@ -162,6 +161,8 @@ class Page(HTMLParser):
             self._details_children[-1].append(tag)
         if tag == "summary" and parent != "details":
             self.problems.append(f"summary inside {parent}")
+        if tag == "a" and any(open_tag == "summary" for open_tag, _ in self._stack):
+            self.problems.append("a link inside a line's summary, which is already a control")
 
     def _record_tag(self, tag, attrs):
         values = dict(attrs)
@@ -173,12 +174,20 @@ class Page(HTMLParser):
                 self.problems.append(f"attribute not allowed: {tag} {name}")
             if name == "fill" and value != "currentColor":
                 self.problems.append(f"fill other than currentColor: {value}")
+            if name == "href":
+                if not re.fullmatch(r"#p-[a-z0-9-]+|#p-\{\{project id\}\}(?:--own)?", value or ""):
+                    self.problems.append(f"a link that is not a jump within the page: {value}")
+                self.jumps.append(value)
+            if name == "id":
+                self.ids.append(value)
         self.tags.append((tag, values))
         return values
 
     def handle_starttag(self, tag, attrs):
         self._check_place(tag)
         values = self._record_tag(tag, attrs)
+        for _, parts in self._open_items:
+            parts.append(" ")  # a new element starts a new word, as it reads on the page
         if tag in VOID:
             return
         self._stack.append((tag, values.get("class", "").split()))
@@ -347,50 +356,61 @@ class TemplateTests(unittest.TestCase):
         found = views(text)
         self.assertEqual([view for view, _, _ in found], list(VIEWS))
         header_end = text.index("</header>")
+        about_start = text.index('<section class="about">')
         footer_start = text.index('<footer class="foot">')
         for view, start, end in found:
             with self.subTest(view=view):
-                self.assertTrue(header_end < start < end < footer_start)
+                self.assertTrue(header_end < start < end < about_start < footer_start)
                 self.assertEqual(text.count(f"<!-- start: {view} view -->"), 1)
-        # As at, Asked, Searched and Could not read sit in the shared header, so every view has them.
+        # The as-at moment heads every page; what was asked and searched, and anything not read, close it.
         header = text[text.index("<header>"):header_end]
-        self.assertEqual(re.findall(r"<dt>(.*?)</dt>", header), list(FACTS))
+        self.assertIn('<p class="asat">As at {{', header)
+        self.assertIn('<p class="partial">Partial: ', header)
+        self.assertEqual(re.findall(r"<dt>(.*?)</dt>", text[about_start:footer_start]), list(ABOUT) + ["Housekeeping"])
         self.assertIn(f'<p class="product">{PRODUCT_NAME}</p>', header)
         self.assertIn(wordmark(text), header)
         self.assertIn(f"<p>{PRODUCT_NAME}</p>", text[footer_start:])
         self.assertRegex(text, rf"<title>[^<]+ - {PRODUCT_NAME}</title>")
-        every = text[found[0][1]:found[0][2]]
-        tiles = re.findall(r'<span class="count">\{\{number\}\}</span> ([^<]+)</li>', every)
-        self.assertEqual(tiles, ["overdue", "due today", "due in the next 7 days", "waiting on you", "waiting on others",
-                                 "with no due date"])
-        self.assertEqual(re.findall(r"<h2>(.*?)</h2>", every), ["Recorded two ways", "Needs attention", "Projects",
-                                                               "Open work by project"])
-        self.assertEqual(re.findall(r"<th[^>]*>(\w[^<]*)</th>", every), ["Project", "Owner", "Target", "Open", "Overdue", "Earliest due", "Last recorded"])
-        self.assertEqual(re.findall(r'<h3 class="group">(.*?)</h3>', every), ["Waiting on you", "Waiting on others", "No person named"])
-        self.assertIn('<details class="project" open>', every)
-        one = text[found[1][1]:found[1][2]]
-        self.assertEqual(re.findall(r"<h2>(.*?)</h2>", one), [
-            "Recorded two ways", "Needs attention", "Projects", "Open work", "Decided in the last three weeks",
-            "Changed in the last three weeks", "Done in the last three weeks", "Cancelled in the last three weeks",
-            "Notes from the last three weeks", "Documents and repository references",
-        ])
-        self.assertEqual(re.findall(r"<dt>(.*?)</dt>", one), ["Purpose", "Owner", "Target", "Status", "Part of",
-                                                               "Projects inside it", "Last recorded"])
-        # Both tables have the same columns and cells, and on a phone each cell carries its own label.
-        for view in (every, one):
-            self.assertEqual(re.findall(r"<th[^>]*>(\w[^<]*)</th>", view)[-7:], ["Project", "Owner", "Target", "Open", "Overdue", "Earliest due", "Last recorded"])
-            self.assertEqual(re.findall(r'<td class="([^"]+)">', view),
-                             ["owner", "target late", "num open", "num overdue late", "due late", "last"])
-            self.assertIn('<span class="status">', view)
+        every, one, person = (text[start:end] for _, start, end in found)
+        for view in (every, one, person):
+            self.assertEqual(re.findall(r'<p class="stat[^"]*"><strong>\{\{number\}\}</strong> ([^<]+)</p>', view),
+                             ["overdue", "due today", "due in the next 7 days"])
+            self.assertIn('<details class="week">', view)
+            self.assertIn('<section class="part two-ways">', view)
+        self.assertEqual(re.findall(r"<h2>(\w[^<]*?) <span", every), ["Recorded two ways", "Needs attention", "Projects"])
+        self.assertEqual(re.findall(r"<h2>(\w[^<]*?) <span", one), ["Recorded two ways", "Needs attention", "Projects",
+                                                                   "Needs attention", "Open work", "Last three weeks"])
+        self.assertEqual(re.findall(r"<h2>(\w[^<]*?) <span", person), ["Recorded two ways", "Needs attention", "People"])
+        # Projects are rows that open: a project with projects inside it, its own work, and every other project.
+        for kind in ('<details class="node parent" id="p-{{project id}}" open>', '<details class="node own" id="p-{{project id}}--own">',
+                     '<details class="node" id="p-{{project id}}">'):
+            self.assertIn(kind, every)
+        self.assertIn('<a class="jump" href="#p-{{project id}}">', every)
+        self.assertIn('<details class="files">', one)
+        for label in ("You owe or Owes", "Waiting for", "No person named", '<details class="fold">', '<details class="node person" open>'):
+            self.assertIn(label, person)
         style = Page(text).style
         narrow = style[style.index("@media (max-width: 40rem)"):style.index("@media print")]
-        for cell, label in (("owner", "Owner "), ("target", "Target "), ("open", "Open "), ("overdue", "Overdue "),
-                            ("due", "Earliest due "), ("last", "Last recorded ")):
-            self.assertIn(f'.projects td.{cell}::before {{ content: "{label}"; }}', narrow)
-        self.assertIn(".projects thead { display: none; }", narrow)
-        person = text[found[2][1]:found[2][2]]
-        for label in ("Owes", "Waiting for", "No person named"):
-            self.assertIn(label, person)
+        self.assertIn(".heads { display: none; }", narrow)
+        self.assertIn(".node > summary .num, .node > summary .last { display: none; }", narrow)
+        printed = style[style.index("@media print"):]
+        # Printing opens every project and person, so every item prints as its one line; the lines stay closed.
+        self.assertIn(".node::details-content, .fold::details-content, .files::details-content { content-visibility: visible; display: block; }", printed)
+
+    def test_every_line_can_be_read_and_reached_by_anyone(self):
+        style = Page(read(TEMPLATE)).style
+        # Fading text with opacity would take muted text below 4.5:1, so quiet text uses the muted colour alone.
+        self.assertNotIn("opacity", style)
+        self.assertIn(":focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }", style)
+        self.assertIn("summary { cursor: pointer; }", style)
+        self.assertIn(".stat.zero strong { color: var(--muted); font-weight: 400; }", style)
+        # A long project name never squeezes the subject, a tag wraps on a phone, and long words break.
+        self.assertIn(".side { max-width: 18rem;", style)
+        narrow = style[style.index("@media (max-width: 40rem)"):style.index("@media print")]
+        self.assertIn(".tag { white-space: normal; }", narrow)
+        self.assertIn("h1, .lead, .known, .sub, .meta, .group, .quiet, .none, .fold > summary, .week > summary { overflow-wrap: anywhere; }", style)
+        # The row of a project's own work gives no facts: the row above it does.
+        self.assertNotIn('<span class="itself">itself</span></span><span class="status">', read(TEMPLATE))
 
     def test_escaping_rules_make_record_text_plain_text(self):
         rules = template_rules()
@@ -419,11 +439,11 @@ class TemplateTests(unittest.TestCase):
         text = read(ADD_IN)
         self.assertIn("](overview-template.html)", text)
         gives_back = section(text, "What it gives back")
-        for phrase in ("`Views/`", "self-contained HTML file", "SBR's brand", "snapshot, never an authority",
+        for phrase in ("`2 Views/`", "self-contained HTML file", "SBR's brand", "snapshot, never an authority",
                        "short summary in chat", "read back", "as at", "searched", "could not be read"):
             self.assertIn(phrase, gives_back)
         steps = section(text, "Steps")
-        for phrase in ("`Views/2026-10-23-project-overview.html`", "Never replace an existing page", "Only then call it saved",
+        for phrase in ("`2 Views/2026-10-23-project-overview.html`", "Never replace an existing page", "Only then call it saved",
                        "show both together and ask which stands", "Keep the record's own words and states",
                        "Do not add a priority, percent complete, on-track or health judgement", "never call related work blocking",
                        "Needs attention", "Waiting on you", "waiting on others", "no person named", "the longest late first"):
@@ -505,12 +525,13 @@ class ExamplePageTests(unittest.TestCase):
         self.assertIn(footer, self.text)
         header = self.text[self.text.index("<header>"):self.text.index("</header>")]
         self.assertIn(f'<p class="product">{PRODUCT_NAME}</p>', header)
-        facts = re.findall(r"<dt>(.*?)</dt>\n<dd>(.*?)</dd>", header)
-        self.assertEqual([name for name, _ in facts], list(FACTS))
+        about = self.text[self.text.index('<section class="about">'):self.text.index('<footer class="foot">')]
+        facts = re.findall(r"<dt>(.*?)</dt>\n<dd>(.*?)</dd>", about)
+        self.assertEqual([name for name, _ in facts], list(ABOUT))
         for name, value in facts:
             self.assertTrue(value.strip(), name)
         made = date.fromisoformat(EXAMPLE_PAGE.name[:10])
-        self.assertIn(long_date(made), dict(facts)["As at"])
+        self.assertIn(f'<p class="asat">As at Friday {long_date(made)}, 9:00 am NZDT</p>', header)
         self.assertIn("Record/", dict(facts)["Searched"])
         self.assertRegex(self.text, rf"<title>Project overview, {short_date(made)} - {PRODUCT_NAME}</title>")
 
@@ -518,10 +539,10 @@ class ExamplePageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="pace-overview-example-") as temporary:
             copy = Path(temporary) / "example"
             shutil.copytree(EXAMPLE, copy, ignore=shutil.ignore_patterns("__pycache__"))
-            (copy / "Views" / EXAMPLE_PAGE.name).unlink()
+            (copy / "2 Views" / EXAMPLE_PAGE.name).unlink()
             args = po.build_parser().parse_args(["--pace", str(copy), "--as-at", EXAMPLE_AS_AT, "--save"])
             out, code = po.run(args)
-            self.assertEqual((out["status"], code, out["page"]), ("saved", 0, f"Views/{EXAMPLE_PAGE.name}"), out)
+            self.assertEqual((out["status"], code, out["page"]), ("saved", 0, f"2 Views/{EXAMPLE_PAGE.name}"), out)
             self.assertEqual((copy / out["page"]).read_bytes(), EXAMPLE_PAGE.read_bytes())
 
     def test_example_page_keeps_each_records_own_words(self):
@@ -565,14 +586,22 @@ class ExamplePageTests(unittest.TestCase):
         self.assertNotIn("request id", read(TEMPLATE))
 
     def test_example_page_puts_what_is_late_first(self):
-        start = self.text.index("<h2>Needs attention</h2>")
+        start = self.text.index("<h2>Needs attention")
         attention = self.text[start:self.text.index("</section>", start)]
         late = attention.index(po.esc("Sam to send the cost centre list for the <Drivers & Inputs> tab."))
         self.assertLess(late, attention.index(po.esc("Owner to sign off the wage assumptions so Ana can finish the staff costs.")))
-        self.assertIn('<p class="where">Maple Lantern &rsaquo; Budget 2027</p>', attention)  # a mixed list names the project
-        self.assertIn('<li class="item late">', attention)
-        self.assertIn('<span class="when">2 days late</span>', attention)
-        self.assertIn('<li class="tile key"><span class="count">1</span> overdue</li>', self.text)
+        # A mixed list names each item's project; opening the line gives a jump to the project's row.
+        self.assertIn('<span class="side">Maple Lantern &rsaquo; Budget 2027</span>', attention)
+        self.assertIn('<p class="go"><a class="jump" href="#p-maple-budget">Go to Maple Lantern &rsaquo; Budget 2027</a></p>', attention)
+        self.assertIn('<span class="tag late">2 days late</span>', attention)
+        self.assertIn('<p class="stat hot"><strong>1</strong> overdue</p>', self.text)
+        self.assertIn('<details class="node" id="p-maple-budget">', self.text)
+
+    def test_example_page_shows_the_last_7_days_and_each_project_as_a_row(self):
+        self.assertIn('<summary>Last 7 days: <strong>3</strong> new &middot; <strong>1</strong> done</summary>', self.text)
+        projects = self.text[self.text.index("<h2>Projects"):]
+        self.assertIn('<details class="node parent" id="p-maple-lantern" open>', projects)
+        self.assertIn('<span class="pname">Budget 2027</span><span class="status">', projects)
 
     def test_example_page_escapes_record_text(self):
         record = read(EXAMPLE / "Record/20261025T204000Z--maple-budget--csl001.md")

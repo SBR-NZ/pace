@@ -2,7 +2,7 @@
 
 It reads records and projects with the record tool's own readers, follows
 corrections and withdrawals, counts and orders open work from its dates, fills
-in the add-in's template, and saves only new files in Views/.
+in the add-in's template, and saves only new files in 2 Views/.
 """
 
 from pathlib import Path
@@ -49,7 +49,7 @@ class Folder:
 
     def project(self, pid, name, parent="none", purpose="Invented work."):
         self.folders = getattr(self, "folders", {})
-        folder = (self.folders[parent] if parent != "none" else self.root / "Projects") / name
+        folder = (self.folders[parent] if parent != "none" else self.root / "1 Projects") / name
         (folder / "Documents").mkdir(parents=True, exist_ok=True)
         (folder / "Pace project.md").write_text(
             f"---\nformat: project-1\nid: {pid}\nparent: {parent}\ncreated: 2026-10-20T09:00:00+13:00\nby: Test\n---\n\n{purpose}\n",
@@ -105,6 +105,15 @@ class OverviewCase(unittest.TestCase):
 
     def page(self, out):
         return (self.f.root / out["page"]).read_text(encoding="utf-8")
+
+    def row(self, text, pid, own=False):
+        """The line of a project's row: its name, facts, what is next, open count, next due date and last activity."""
+        ident = f"p-{pid}--own" if own else f"p-{pid}"
+        return re.search(rf'<details class="node[^"]*" id="{ident}"(?: open)?>\n<summary>(.*?)</summary>', text, re.S).group(1)
+
+    def order(self, text, pids):
+        """Where each project's row starts on the page, to compare their order."""
+        return [text.index(f'id="p-{pid}"') for pid in pids]
 
 
 class CountingTests(OverviewCase):
@@ -207,8 +216,8 @@ class CountingTests(OverviewCase):
         f.action(self.budget, "Newer item")
         f.action(self.budget, "Older item", corrects=older, body="Older, with more detail.")
         text = self.page(f.run("--save")[0])
-        work = text[text.index("<h2>Open work by project</h2>"):]
-        self.assertLess(work.index("Older, with more detail."), work.index("<strong>Newer item</strong>"))
+        work = text[text.index('id="p-kowhai-budget"'):]
+        self.assertLess(work.index("Older, with more detail."), work.index('<span class="subj">Newer item</span>'))
 
 
 class StoryTests(OverviewCase):
@@ -243,13 +252,13 @@ class StoryTests(OverviewCase):
         f.action(self.budget, "Board pack", corrects=first, owed_by="Ana Ruiz", body="Ana says the 12th.")
         f.action(self.budget, "Board pack", corrects=first, owed_by="Ana Ruiz", body="Sam says the 16th.")
         every = self.page(f.run("--save")[0])
-        self.assertIn("<h2>Recorded two ways</h2>", every)
+        self.assertIn('<h2>Recorded two ways <span class="n">1</span></h2>', every)
         # Neither the project nor its parent is called idle: their work is in the two-ways section.
         self.assertIn('<p class="quiet">No open work recorded: Kowhai Books &rsaquo; Website, Pohutu Trust.</p>', every)
         for view in (["--by-person"], ["--project", self.budget]):
             with self.subTest(view=view):
                 text = self.page(f.run("--save", *view)[0])
-                self.assertIn("<h2>Recorded two ways</h2>", text)
+                self.assertIn('<h2>Recorded two ways <span class="n">1</span></h2>', text)
                 self.assertIn("Ana says the 12th.", text)
                 self.assertIn("Sam says the 16th.", text)
 
@@ -268,25 +277,21 @@ class StoryTests(OverviewCase):
 
 
 class ProjectFactTests(OverviewCase):
-    def row(self, text, name):
-        table = text[text.index("<tbody>"):text.index("</tbody>")]
-        return next(row for row in table.split("</tr>") if f"{name}<" in row)
-
     def test_owner_target_and_status_come_from_the_latest_change_that_sets_each(self):
         f = self.f
         f.record(self.budget, "change", "Budget 2027", "Sam leads.", owner="Sam Lee", target="2026-11-20", status="Started")
         f.record(self.budget, "change", "Budget 2027", "Ana leads now.", owner="Ana Ruiz", status="Waiting on the wage sign-off",
                  created="2026-10-28T09:00:00+13:00")
         f.action(self.budget, "Budget task")
-        row = self.row(self.page(f.run("--save")[0]), "Budget 2027")
-        self.assertIn('<span class="status"> Waiting on the wage sign-off &middot; 28 Oct 2026</span>', row)
-        self.assertIn('<td class="owner">Ana Ruiz</td><td class="target">20 Nov 2026, in 18 days</td>', row)
+        row = self.row(self.page(f.run("--save")[0]), self.budget)
+        self.assertIn('<span class="status">Waiting on the wage sign-off &middot; 28 Oct 2026</span>', row)
+        self.assertIn('<span class="fact">Owner Ana Ruiz &middot; Target <span>20 Nov 2026, in 18 days</span></span>', row)
         self.assertNotIn("Started", row)
-        # none clears one and the others stand; with no target left anywhere, the Target column goes.
+        # none clears one and the others stand.
         f.record(self.budget, "change", "Budget 2027", "No target for now.", target="none")
-        text = self.page(f.run("--save")[0])
-        self.assertIn('<td class="owner">Ana Ruiz</td><td class="num open">', self.row(text, "Budget 2027"))
-        self.assertNotIn("<th>Target</th>", text)
+        row = self.row(self.page(f.run("--save")[0]), self.budget)
+        self.assertIn('<span class="fact">Owner Ana Ruiz</span>', row)
+        self.assertNotIn("Target", row)
 
     def test_a_change_recorded_two_ways_shows_as_that_until_the_owner_says_which_stands(self):
         f = self.f
@@ -296,12 +301,12 @@ class ProjectFactTests(OverviewCase):
         f.record(self.budget, "change", "Budget 2027", "Rangi leads.", owner=OWNER, corrects=first)
         f.action(self.budget, "Budget task")
         text = self.page(f.run("--save")[0])
-        row = self.row(text, "Budget 2027")
+        row = self.row(text, self.budget)
         # The newest word on the owner is disputed, so the older owner is not shown as if it stood; the status stands.
-        self.assertIn('<td class="owner">Recorded two ways</td>', row)
+        self.assertIn('<span class="fact">Owner Recorded two ways</span>', row)
         self.assertNotIn("Kiri Hale", row)
         self.assertIn("Started", row)
-        self.assertIn("<h2>Recorded two ways</h2>", text)
+        self.assertIn("<h2>Recorded two ways", text)
 
     def test_accounts_that_agree_on_a_value_set_it_and_a_note_in_the_dispute_counts(self):
         f = self.f
@@ -311,44 +316,44 @@ class ProjectFactTests(OverviewCase):
         f.record(self.budget, "change", "Budget 2027", "Ana leads, from Rangi.", owner="Ana Ruiz", status="Drafting",
                  corrects=first)
         f.action(self.budget, "Budget task")
-        row = self.row(self.page(f.run("--save")[0]), "Budget 2027")
-        self.assertIn('<td class="owner">Ana Ruiz</td>', row)  # both accounts say Ana
-        self.assertIn("> Recorded two ways</span>", row)  # one account gives a status, the other none
+        row = self.row(self.page(f.run("--save")[0]), self.budget)
+        self.assertIn('<span class="fact">Owner Ana Ruiz</span>', row)  # both accounts say Ana
+        self.assertIn('<span class="status">Recorded two ways</span>', row)  # one account gives a status, the other none
         # A note standing against a change still makes what the change sets disputed, not the older value.
         later = f.record(self.site, "change", "Website", "Mere leads.", owner="Mere Tane")
         f.record(self.site, "change", "Website", "Tom leads.", owner="Tom Ihaka", corrects=later)
         f.record(self.site, "note", "Website", "It is not decided.", corrects=later)
         f.action(self.site, "Site task")
-        row = self.row(self.page(f.run("--save")[0]), "Website")
-        self.assertIn('<td class="owner">Recorded two ways</td>', row)
+        row = self.row(self.page(f.run("--save")[0]), self.site)
+        self.assertIn('<span class="fact">Owner Recorded two ways</span>', row)
 
     def test_the_owner_leading_shows_as_you_and_a_passed_target_is_late(self):
         f = self.f
         f.record(self.site, "change", "Website", "Mine, and it was due last week.", owner="owner", target="2026-10-28")
         f.action(self.site, "Site task")
-        row = self.row(self.page(f.run("--save")[0]), "Website")
-        self.assertIn('<td class="owner">You</td><td class="target late">28 Oct 2026, 5 days late</td>', row)
+        row = self.row(self.page(f.run("--save")[0]), self.site)
+        self.assertIn('<span class="fact">Owner You &middot; Target <span class="late">28 Oct 2026, 5 days late</span></span>', row)
 
-    def test_columns_show_only_when_a_project_has_one(self):
+    def test_owner_and_target_show_only_when_recorded(self):
         f = self.f
         f.action(self.budget, "Budget task")
         text = self.page(f.run("--save")[0])
-        self.assertIn("<tr><th>Project</th><th class=\"num\">Open</th>", text)
+        self.assertNotIn('class="fact"', text)
         f.record(self.site, "change", "Website", "Aiming for December.", target="2026-12-01")
-        text = self.page(f.run("--save")[0])
-        self.assertIn("<tr><th>Project</th><th>Target</th><th class=\"num\">Open</th>", text)
-        self.assertNotIn("<th>Owner</th>", text)
+        row = self.row(self.page(f.run("--save")[0]), self.site)
+        self.assertIn('<span class="fact">Target <span>1 Dec 2026, in 29 days</span></span>', row)
+        self.assertNotIn("Owner", row)
 
     def test_a_project_with_only_a_status_is_in_the_table_not_idle(self):
         f = self.f
         f.record(self.solo, "change", "Trust", "Paused.", status="On hold until January")
         f.action(self.budget, "Budget task")
         text = self.page(f.run("--save")[0])
-        row = self.row(text, "Pohutu Trust")
+        row = self.row(text, self.solo)
         self.assertIn("On hold until January", row)
-        self.assertIn('<td class="num open">0</td>', row)
+        self.assertIn('<span class="num">0</span>', row)
+        self.assertIn('<span class="next">No open work recorded</span>', row)
         self.assertNotIn("Pohutu Trust", text[text.index('<p class="quiet">No open work recorded'):].split("</p>")[0])
-        self.assertNotIn("Pohutu Trust</summary>", text)  # no open work, so no section of its own
 
     def test_correcting_an_older_change_does_not_make_it_the_newest(self):
         f = self.f
@@ -359,9 +364,9 @@ class ProjectFactTests(OverviewCase):
         f.record(self.budget, "change", "Budget 2027 kick-off", "Sam leads.", owner="Sam Lee", status="Started", corrects=older,
                  created="2026-10-28T09:00:00+13:00")  # only the subject is fixed
         f.action(self.budget, "Budget task")
-        row = self.row(self.page(f.run("--save")[0]), "Budget 2027")
-        self.assertIn('<td class="owner">Ana Ruiz</td>', row)
-        self.assertIn("> Waiting &middot; 24 Oct 2026</span>", row)
+        row = self.row(self.page(f.run("--save")[0]), self.budget)
+        self.assertIn('<span class="fact">Owner Ana Ruiz</span>', row)
+        self.assertIn('<span class="status">Waiting &middot; 24 Oct 2026</span>', row)
 
     def test_odd_change_records_never_stop_the_page(self):
         f = self.f
@@ -371,7 +376,7 @@ class ProjectFactTests(OverviewCase):
             with self.subTest(view=view):
                 out, code = f.run("--save", *view)
                 self.assertEqual((out["status"], code), ("saved", 0), out)
-                self.assertNotIn("27 November</td>", self.page(out))
+                self.assertNotIn("Target", self.page(out).split("<h2>Needs attention")[1].split('<section class="about">')[0])
                 # The target was not used, and every view says why, so it does not vanish without trace.
                 self.assertFalse(out["complete"])
                 self.assertIn("gives the target '27 November', which is not a real date, so it was not used.", out["could_not_read"])
@@ -380,11 +385,12 @@ class ProjectFactTests(OverviewCase):
         f = self.f
         f.record(self.budget, "change", "Budget 2027", "Ana leads.", owner="Ana Ruiz", target="2026-11-27", status="Drafting")
         text = self.page(f.run("--save", "--project", self.budget)[0])
-        for line in ("<dt>Owner</dt>\n<dd>Ana Ruiz</dd>", "<dt>Target</dt>\n<dd>27 Nov 2026, in 25 days</dd>",
-                     "<dt>Status</dt>\n<dd>Drafting &middot; 25 Oct 2026</dd>"):
+        for line in ("<span>Owner <strong>Ana Ruiz</strong></span>", "<span>Target <strong>27 Nov 2026, in 25 days</strong></span>",
+                     "<span>Status <strong>Drafting &middot; 25 Oct 2026</strong></span>",
+                     "<span>Part of <strong>Kowhai Books</strong></span>"):
             self.assertIn(line, text)
         text = self.page(f.run("--save", "--project", self.site)[0])
-        self.assertIn("<dt>Owner</dt>\n<dd>Not recorded</dd>", text)
+        self.assertNotIn("Owner <strong>", text)  # only what is recorded is shown
 
 
 class OddFolderTests(OverviewCase):
@@ -397,15 +403,15 @@ class OddFolderTests(OverviewCase):
         self.assertIn("No project line.", self.page(out))
 
     def test_a_project_whose_parents_loop_is_still_shown(self):
-        loop = self.f.root / "Projects/Loop"
+        loop = self.f.root / "1 Projects/Loop"
         loop.mkdir()
         (loop / "Pace project.md").write_text(
             "---\nformat: project-1\nid: loop\nparent: loop\ncreated: 2026-10-20T09:00:00+13:00\nby: Hand\n---\n", encoding="utf-8")
         self.f.action("loop", "Looped work")
         out, _ = self.f.run("--save")
         text = self.page(out)
-        self.assertIn("<tr><th>Loop</th>", text)
-        self.assertIn("Loop <span class=\"counts\">", text)
+        self.assertIn('<span class="pname">Loop</span>', self.row(text, "loop"))
+        self.assertIn("Looped work", text)
         self.assertFalse(out["complete"])  # the parent that does not match is named
 
     def test_the_order_is_the_same_on_every_run(self):
@@ -419,18 +425,20 @@ class OddFolderTests(OverviewCase):
                                  capture_output=True, text=True, env={**os.environ, "PYTHONHASHSEED": seed})
             self.assertEqual(run.returncode, 0, run.stderr)
             text = (f.root / json.loads(run.stdout)["page"]).read_text(encoding="utf-8")
-            table = text[text.index("<tbody>"):text.index("</tbody>")]
-            orders.add(tuple(sorted(("Alpha", "Beta", "Delta", "Gamma"), key=table.index)))
-        self.assertEqual(orders, {("Alpha", "Beta", "Delta", "Gamma")})
+            orders.add(tuple(sorted(("alpha", "beta", "delta", "gamma"), key=lambda pid: text.index(f'id="p-{pid}"'))))
+        self.assertEqual(orders, {("alpha", "beta", "delta", "gamma")})
 
-    def test_a_status_still_reads_with_a_template_made_before_it(self):
+    def test_a_template_styled_for_an_earlier_page_design_gets_the_shipped_styles(self):
         f = self.f
-        f.record(self.budget, "change", "Budget 2027", "Paused.", status="Paused")
+        f.action(self.budget, "Budget task")
         shipped = (f.root / "Product/Pace add-ins/Project overview/overview-template.html").read_text(encoding="utf-8")
         older = Path(self._temp.name) / "older-template.html"
-        older.write_text(re.sub(r"\.status \{[^}]*\}\n", "", shipped), encoding="utf-8")
-        text = self.page(f.run("--save", "--template", str(older))[0])
-        self.assertIn('Budget 2027<span class="status"> Paused', text)  # a space keeps it apart without the new style
+        older.write_text(shipped.replace(".node", ".project").replace(".row", ".item-row"), encoding="utf-8")
+        out, _ = f.run("--save", "--template", str(older))
+        text = self.page(out)
+        self.assertIn(".node > summary", text)  # the page is styled, not left bare
+        self.assertIn("made for an earlier page design, so the shipped template's styles were used", out["message"])
+        self.assertNotIn("earlier page design", f.run("--save")[0]["message"])
 
 
 class DepthTests(OverviewCase):
@@ -445,27 +453,28 @@ class DepthTests(OverviewCase):
         f.action(self.site, "Site soon", due="2026-11-04")
         f.action(self.solo, "Trust undated")
         text = self.page(f.run("--save")[0])
-        table = text[text.index("<tbody>"):text.index("</tbody>")]
-        self.assertIn('<tr><th><span class="parent">Kowhai Books &rsaquo; Budget 2027 &rsaquo; Board pack &rsaquo;</span> Slides</th>',
-                      table)
-        order = [table.index(row) for row in ("Slides</th>", "Website</th>", "<tr><th>Pohutu Trust</th>")]
+        order = self.order(text, (self.client, self.budget, self.board, self.slides, self.site, self.solo))
         self.assertEqual(order, sorted(order))
         # The projects above Slides hold no work of their own, but none is idle: Slides is inside them.
         self.assertNotIn("No open work recorded", text)
-        self.assertIn(
-            '<p class="where">Kowhai Books &rsaquo; Budget 2027 &rsaquo; Board pack &rsaquo; Slides</p>',
-            text[text.index("<h2>Needs attention</h2>"):])
+        for parent in (self.client, self.budget, self.board):
+            self.assertIn(f'<details class="node parent" id="p-{parent}" open>', text)
+            self.assertNotIn(f'id="p-{parent}--own"', text)
+        self.assertIn('<span class="next">Next: Slides late &middot; Budget 2027 &rsaquo; Board pack &rsaquo; Slides</span>',
+                      self.row(text, self.client))
+        self.assertIn('<a class="jump" href="#p-kowhai-slides">Go to Kowhai Books &rsaquo; Budget 2027 &rsaquo; Board pack &rsaquo; Slides</a>',
+                      text[text.index("<h2>Needs attention"):])
 
     def test_projects_side_by_side_run_by_the_most_pressing_work_anywhere_inside_them(self):
         f = self.f
         f.action(self.site, "Site soon", due="2026-11-04")
         f.action(self.budget, "Budget undated")
         f.action(self.slides, "Slides late", due="2026-10-30")
-        table = self.page(f.run("--save")[0])
-        table = table[table.index("<tbody>"):table.index("</tbody>")]
+        text = self.page(f.run("--save")[0])
         # Budget 2027's own work is undated, but Slides inside it is late, so its branch comes before Website.
-        order = [table.index(row) for row in ("Budget 2027</th>", "Slides</th>", "Website</th>")]
+        order = self.order(text, (self.budget, self.slides, self.site))
         self.assertEqual(order, sorted(order))
+        self.assertLess(text.index(f'id="p-{self.budget}--own"'), text.index(f'id="p-{self.board}"'))  # its own work first
 
     def test_one_project_takes_in_every_project_inside_it_at_any_depth(self):
         f = self.f
@@ -474,12 +483,11 @@ class DepthTests(OverviewCase):
         out, _ = f.run("--save", "--project", self.client)
         self.assertEqual(out["counts"]["open"], 2)
         text = self.page(out)
-        self.assertIn("<dd>Budget 2027, Budget 2027 &rsaquo; Board pack, Budget 2027 &rsaquo; Board pack &rsaquo; Slides, Website</dd>",
-                      text)
-        table = text[text.index("<h2>Projects</h2>"):text.index("</table>")]
-        self.assertLess(table.index("Slides</th>"), table.index("Website</th>"))
+        order = self.order(text, (self.budget, self.board, self.slides, self.site))
+        self.assertEqual(order, sorted(order))
+        self.assertIn('<a class="jump" href="#p-kowhai-slides">Go to Budget 2027 &rsaquo; Board pack &rsaquo; Slides</a>', text)
         deepest = self.page(f.run("--save", "--project", self.slides)[0])
-        self.assertIn("<dt>Part of</dt>\n<dd>Kowhai Books &rsaquo; Budget 2027 &rsaquo; Board pack</dd>", deepest)
+        self.assertIn("<span>Part of <strong>Kowhai Books &rsaquo; Budget 2027 &rsaquo; Board pack</strong></span>", deepest)
         self.assertIn("<h1>Slides</h1>", deepest)
 
 
@@ -487,25 +495,28 @@ class PageTests(OverviewCase):
     def test_the_saved_page_is_well_formed_and_read_back(self):
         self.f.action(self.budget, "Late one", due="2026-10-28", owed_by=OWNER)
         out, code = self.f.run("--save", "--asked", "Where are we?")
-        self.assertEqual((out["status"], code, out["page"]), ("saved", 0, "Views/2026-11-02-project-overview.html"), out)
-        self.assertIn("Saved and read back: Views/2026-11-02-project-overview.html.", out["message"])
+        self.assertEqual((out["status"], code, out["page"]), ("saved", 0, "2 Views/2026-11-02-project-overview.html"), out)
+        self.assertIn("Saved and read back: 2 Views/2026-11-02-project-overview.html.", out["message"])
         text = self.page(out)
         page = Page(text)
         self.assertEqual(page.problems, [])
         self.assertIsNone(FORBIDDEN.search(text))
         self.assertIn("<dd>Where are we?</dd>", text)
-        self.assertIn("<dd>Monday 2 November 2026, 9:00 am NZDT</dd>", text)
+        self.assertIn('<p class="asat">As at Monday 2 November 2026, 9:00 am NZDT</p>', text)
         self.assertIn("<title>Project overview, 2 Nov 2026 - Pace by SBR</title>", text)
-        self.assertIn('<li class="tile key"><span class="count">1</span> overdue</li>', text)
-        self.assertIn('<span class="when">5 days late</span>', text)
+        self.assertIn("<h1>All projects</h1>", text)
+        self.assertIn('<p class="stat hot"><strong>1</strong> overdue</p>', text)
+        self.assertIn('<p class="stat zero"><strong>0</strong> due today</p>', text)
+        self.assertIn('<span class="tag late">5 days late</span>', text)
+        self.assertNotIn('class="partial"', text)
         self.assertNotRegex(text, r"\bRecord \d{8}T\d{6}Z")  # record references stay in the tool's result, not on the page
         self.assertEqual(out["needs_attention"][0]["request"][:9], "20261025T")
 
     def test_a_page_is_never_replaced(self):
         pages = [self.f.run("--save")[0] for _ in range(3)]
-        self.assertEqual([out["page"] for out in pages], ["Views/2026-11-02-project-overview.html",
-                                                          "Views/2026-11-02-project-overview-2.html",
-                                                          "Views/2026-11-02-project-overview-3.html"])
+        self.assertEqual([out["page"] for out in pages], ["2 Views/2026-11-02-project-overview.html",
+                                                          "2 Views/2026-11-02-project-overview-2.html",
+                                                          "2 Views/2026-11-02-project-overview-3.html"])
         self.assertEqual(self.page(pages[0]), self.page(pages[2]))
 
     def test_projects_are_grouped_under_their_parent_most_pressing_first(self):
@@ -515,18 +526,16 @@ class PageTests(OverviewCase):
         f.action(self.solo, "Trust undated")
         f.action(self.client, "Client undated")
         text = self.page(f.run("--save")[0])
-        table = text[text.index("<tbody>"):text.index("</tbody>")]
-        # The Kowhai group is the most pressing; in it the parent's own row comes first, then its projects.
-        rows = ["<tr><th>Kowhai Books</th>", "Budget 2027</th>", "Website</th>", "<tr><th>Pohutu Trust</th>"]
-        order = [table.index(row) for row in rows]
+        # The Kowhai group is the most pressing; in it the parent's own work comes first, then its projects.
+        order = [text.index(f'id="{ident}"') for ident in ("p-kowhai", "p-kowhai--own", "p-kowhai-budget", "p-kowhai-site", "p-pohutu")]
         self.assertEqual(order, sorted(order))
-        # Earliest due is the earliest date of the project's open work, overdue or not.
-        self.assertIn('<td class="num overdue late">1</td><td class="due late">30 Oct 2026, 3 days late</td>', table)
-        self.assertIn('<td class="num overdue">0</td><td class="due">4 Nov 2026, in 2 days</td>', table)
-        self.assertIn('<td class="num open">1</td><td class="num overdue">0</td><td class="due">No due date</td>', table)
+        # Next due is the earliest date of the project's open work, overdue or not, and a parent's takes in its projects.
+        self.assertIn('<span class="num">3</span><span class="due"><span class="tag late">3 days late</span></span>', self.row(text, self.client))
+        self.assertIn('<span class="due"><span class="tag late">3 days late</span></span>', self.row(text, self.budget))
+        self.assertIn('<span class="due"><span class="tag soon">In 2 days</span></span>', self.row(text, self.site))
+        self.assertIn('<span class="num">1</span><span class="due"><span class="tag empty">No date</span></span>', self.row(text, self.solo))
+        self.assertIn('<span class="pname">Kowhai Books <span class="itself">itself</span></span>', self.row(text, self.client, own=True))
         self.assertNotIn("No open work recorded", text)
-        details = text[text.index("<h2>Open work by project</h2>"):]
-        self.assertLess(details.index("Budget 2027"), details.index("Pohutu Trust"))
 
     def test_a_parent_whose_projects_have_open_work_is_not_listed_as_having_none(self):
         f = self.f
@@ -535,19 +544,20 @@ class PageTests(OverviewCase):
         text = self.page(f.run("--save")[0])
         self.assertIn('<p class="quiet">No open work recorded: Kowhai Books &rsaquo; Plans, Kowhai Books &rsaquo; Website, '
                       'Pohutu Trust.</p>', text)
-        table = text[text.index("<tbody>"):text.index("</tbody>")]
-        self.assertNotIn("<tr><th>Kowhai Books</th>", table)
-        self.assertIn("Budget 2027</th>", table)
+        self.assertIn('<details class="node parent" id="p-kowhai" open>', text)
+        self.assertNotIn('id="p-kowhai--own"', text)  # it has no open work of its own
+        self.assertIn('id="p-kowhai-budget"', text)
 
     def test_record_text_cannot_add_markup(self):
         hostile = '<script>alert(1)</script> & "quotes" \'single\' </li></ul><h1>x</h1>'
-        self.f.action(self.budget, "<b>Subject</b>", body=hostile, owed_by="<Sam & Co>")
+        self.f.action(self.budget, "<b>Subject</b>", body=hostile, owed_by="<Sam & Co>", due="2026-11-03")
         text = self.page(self.f.run("--save")[0])
         page = Page(text)
         self.assertEqual(page.problems, [])
         self.assertIsNone(FORBIDDEN.search(text))
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot; &#39;single&#39;", text)
         self.assertIn("Owed by &lt;Sam &amp; Co&gt;", text)
+        self.assertIn('<span class="by"> &middot; &lt;Sam &amp; Co&gt;</span>', text)
         self.assertNotIn("script", {tag for tag, _ in page.tags})
 
     def test_one_project_takes_in_the_projects_inside_it(self):
@@ -559,25 +569,27 @@ class PageTests(OverviewCase):
         f.record(self.budget, "decision", "Old decision", "Too old to show.", created="2026-09-01T09:00:00+13:00")
         f.record(self.budget, "change", "New owner", "Ana now owns the model.", created="2026-10-31T09:00:00+13:00")
         out, code = f.run("--project", "kowhai", "--save")
-        self.assertEqual((out["status"], out["page"], out["view"]), ("saved", "Views/2026-11-02-project-overview-kowhai.html", "one project"))
+        self.assertEqual((out["status"], out["page"], out["view"]), ("saved", "2 Views/2026-11-02-project-overview-kowhai.html", "one project"))
         self.assertEqual(out["counts"]["open"], 2)
         text = self.page(out)
         self.assertEqual(Page(text).problems, [])
         self.assertIn("<h1>Kowhai Books</h1>", text)
-        self.assertIn("<dd>Budget 2027, Website</dd>", text)
+        self.assertIn("<title>Kowhai Books, 2 Nov 2026 - Pace by SBR</title>", text)
         self.assertIn("Use the two-page layout.", text)
         self.assertIn("Ana now owns the model.", text)
+        self.assertIn('<span class="tag">Decided</span><span class="subj">Chosen layout</span>', text)
         self.assertNotIn("Too old to show.", text)
         self.assertNotIn("Not this one", text)
         self.assertIn("<!-- start: one project view -->", text)
-        # A project inside it has open work, so the view has the projects table for it and them.
-        table = text[text.index("<h2>Projects</h2>"):text.index("</table>")]
-        self.assertLess(table.index("Budget 2027</th>"), table.index("Website</th>"))
-        self.assertIn('<td class="due">3 Nov 2026, tomorrow</td>', table)
-        self.assertNotIn("Pohutu Trust", table)
-        # A project with no projects inside it has no table.
-        alone, _ = f.run("--project", "kowhai-budget", "--save")
-        self.assertNotIn("<h2>Projects</h2>", self.page(alone))
+        # A project inside it has open work, so the view has a row for each of them.
+        order = self.order(text, (self.budget, self.site))
+        self.assertEqual(order, sorted(order))
+        self.assertIn('<span class="due"><span class="tag soon">Tomorrow</span></span>', self.row(text, self.budget))
+        self.assertNotIn("Pohutu Trust", text)
+        # A project with no projects inside it lists its open work.
+        alone = self.page(f.run("--project", "kowhai-budget", "--save")[0])
+        self.assertNotIn("<h2>Projects", alone)
+        self.assertIn('<h2>Open work <span class="n">1</span></h2>', alone)
 
     def test_repository_references_go_to_their_own_project(self):
         f = self.f
@@ -608,15 +620,16 @@ class PageTests(OverviewCase):
         f = self.f
         f.action(self.budget, "Due soon", due="2026-11-03")
         shipped = (f.root / "Product/Pace add-ins/Project overview/overview-template.html").read_text(encoding="utf-8")
-        copy = f.root / "My add-ins/Project overview/overview-template.html"
+        copy = f.root / "3 My add-ins/Project overview/overview-template.html"
         copy.parent.mkdir(parents=True)
-        copy.write_text(shipped.replace(".lede { margin-bottom: 0.75rem;", ".lede { margin-bottom: 0.9rem;")
-                        .replace("<h2>Needs attention</h2>", "<h2>Urgent</h2>"), encoding="utf-8")
-        out, _ = f.run("--save", "--template", "My add-ins/Project overview/overview-template.html")
+        copy.write_text(shipped.replace(".lede { margin: 0.5rem 0;", ".lede { margin: 0.9rem 0;")
+                        .replace("<h2>Needs attention", "<h2>Urgent"), encoding="utf-8")
+        out, _ = f.run("--save", "--template", "3 My add-ins/Project overview/overview-template.html")
         text = self.page(out)
-        self.assertIn(".lede { margin-bottom: 0.9rem;", text)
-        self.assertIn("<h2>Needs attention</h2>", text)  # the sections and wording are always the add-in's own
+        self.assertIn(".lede { margin: 0.9rem 0;", text)
+        self.assertIn("<h2>Needs attention", text)  # the sections and wording are always the add-in's own
         self.assertNotIn("Urgent", text)
+        self.assertNotIn("earlier page design", out["message"])
 
     def test_no_text_from_records_or_folders_can_add_markup_in_any_view(self):
         f = self.f
@@ -625,7 +638,7 @@ class PageTests(OverviewCase):
         parent = f.project("evil", parent_name, purpose=hostile)
         child = f.project("evil-kid", child_name, parent="evil", purpose=hostile)
         f.project("idle", idle_name)
-        (f.root / "Projects" / parent_name / "Documents" / '<b>doc & "q".txt').write_text("x", encoding="utf-8")
+        (f.root / "1 Projects" / parent_name / "Documents" / '<b>doc & "q".txt').write_text("x", encoding="utf-8")
         f.action(parent, hostile, body=hostile, due="2026-11-03", owed_by=hostile, **{"for": hostile})
         f.action(child, "Second", body=hostile, owed_by="Sam <Lee>", **{"for": OWNER})
         (f.root / "Record/<i>odd & 'x'.md").write_text("x", encoding="utf-8")  # named on the Could not read line
@@ -642,22 +655,22 @@ class PageTests(OverviewCase):
                 self.assertFalse({"b", "i", "u", "q"} & {tag for tag, _ in page.tags})
                 self.assertIn(escaped["text"], text)
         every = pages["every"]
-        table = every[every.index("<tbody>"):every.index("</tbody>")]
-        self.assertIn(f"<tr><th>{escaped['parent']}</th>", table)
-        self.assertIn(f'<span class="parent">{escaped["parent"]} &rsaquo;</span> {escaped["child"]}</th>', table)
+        self.assertIn(f'<span class="pname">{escaped["parent"]}</span>', self.row(every, "evil"))
+        self.assertIn(f'<span class="pname">{escaped["child"]}</span>', self.row(every, "evil-kid"))
         self.assertIn(f"No open work recorded: {escaped['idle']}, Kowhai Books, ", every)
-        self.assertIn(f'<p class="where">{escaped["parent"]} &rsaquo; {escaped["child"]}</p>', pages["person"])
+        self.assertIn(f'<span class="side">{escaped["parent"]} &rsaquo; {escaped["child"]} &middot; for you</span>', pages["person"])
         self.assertIn(f"<h1>{escaped['parent']}</h1>", pages["parent"])
-        self.assertIn(f"<dt>Projects inside it</dt>\n<dd>{escaped['child']}</dd>", pages["parent"])
+        self.assertIn(f'<span class="pname">{escaped["child"]}</span>', self.row(pages["parent"], "evil-kid"))
+        self.assertIn(f'<p class="lead">{escaped["text"]}</p>', pages["parent"])
         self.assertIn("&lt;b&gt;doc &amp; &quot;q&quot;.txt", pages["parent"])
         self.assertIn(f"<h1>{escaped['child']}</h1>", pages["child"])
-        self.assertIn(f"<dt>Part of</dt>\n<dd>{escaped['parent']}</dd>", pages["child"])
+        self.assertIn(f"<span>Part of <strong>{escaped['parent']}</strong></span>", pages["child"])
         self.assertIn("&lt;i&gt;odd &amp; &#39;x&#39;.md", every)
 
     def test_an_unknown_project_makes_nothing(self):
         out, code = self.f.run("--project", "nope", "--save")
         self.assertEqual((out["status"], code), ("not-made", 1))
-        self.assertEqual(list((self.f.root / "Views").glob("*.html")), [])
+        self.assertEqual(list((self.f.root / "2 Views").glob("*.html")), [])
 
     def test_by_person_puts_the_owner_first(self):
         f = self.f
@@ -668,14 +681,226 @@ class PageTests(OverviewCase):
         out, _ = f.run("--by-person", "--save")
         text = self.page(out)
         self.assertEqual(Page(text).problems, [])
-        cards = [text.index(f"<h2>{name}</h2>") for name in ("You", "Ana Ruiz", "Sam Lee", "No person named")]
-        self.assertEqual(cards, sorted(cards))
-        self.assertIn("For Ana Ruiz", text)
-        self.assertIn("For you", text)
+        rows = [text.index(f'<span class="pname">{name}</span>') for name in ("You", "Ana Ruiz", "Sam Lee", "No person named")]
+        self.assertEqual(rows, sorted(rows))
+        self.assertIn('<details class="node person" open>\n<summary><span class="label"><span class="pname">You</span>', text)
+        self.assertIn("for Ana Ruiz", text)
+        self.assertIn("for you", text)
         # Who an item is for is shown only when the record names someone.
-        self.assertNotIn("For: not recorded", text)
-        sam_alone = text[text.index("<strong>Sam alone</strong>"):]
-        self.assertTrue(sam_alone[sam_alone.index('<p class="meta">'):].startswith('<p class="meta">no due date &middot; open</p>'))
+        self.assertNotIn("for: not recorded", text.lower())
+        self.assertIn('<p class="meta">Owed by Sam Lee &middot; no due date &middot; open</p>', text)
+        self.assertIn('<p class="group">You are waiting for</p>', text)
+        self.assertIn("Kowhai Books &rsaquo; Budget 2027 &middot; from Sam Lee", text)
+
+
+class LineTests(OverviewCase):
+    """Each item is one line; undated work shows how long it has waited; the last 7 days; jumps; leftover copies."""
+
+    def test_undated_work_shows_how_long_it_has_been_open_from_14_days(self):
+        f = self.f
+        f.action(self.budget, "Old mine", created="2026-10-19T09:00:00+13:00")  # 14 days before 2 November
+        f.action(self.site, "Old theirs", owed_by="Sam Lee", created="2026-10-12T09:00:00+13:00")
+        f.action(self.budget, "Fresh", created="2026-10-20T09:00:00+13:00")  # 13 days
+        dated = f.action(self.budget, "Dated", due="2026-11-20", created="2026-10-01T09:00:00+13:00")
+        text = self.page(f.run("--save")[0])
+        self.assertIn('<span class="tag age">Open 14 days</span><span class="subj">Old mine</span>', text)
+        self.assertIn('<span class="tag age">Waiting 21 days</span><span class="subj">Old theirs</span>', text)
+        self.assertIn('<span class="tag"></span><span class="subj">Fresh</span>', text)
+        self.assertIn('<span class="tag">20 Nov</span><span class="subj">Dated</span>', text)  # a due date comes before age
+        self.assertIn("Next: Dated", self.row(text, self.budget))
+        self.assertIn("Oldest open: Old theirs &middot; Sam Lee &middot; open 21 days", self.row(text, self.site))
+        # With nothing dated, a row's line is its oldest open item, with its age once that is 14 days or more.
+        f.action(self.budget, "Dated", corrects=dated, state="done")
+        self.assertIn("Oldest open: Old mine &middot; open 14 days", self.row(self.page(f.run("--save")[0]), self.budget))
+
+    def test_the_last_7_days_counts_new_done_cancelled_and_changed_due_dates(self):
+        f = self.f
+        week = "2026-10-29T09:00:00+13:00"  # inside the 7 days to 2 November
+        f.action(self.budget, "New this week", created=week)
+        done = f.action(self.budget, "Done this week", created="2026-10-10T09:00:00+13:00")
+        f.action(self.budget, "Done this week", corrects=done, state="done", created=week)
+        dropped = f.action(self.site, "Cancelled this week", created="2026-10-10T09:00:00+13:00")
+        f.action(self.site, "Cancelled this week", corrects=dropped, state="cancelled", created=week)
+        moved = f.action(self.site, "Moved this week", due="2026-11-01", created="2026-10-10T09:00:00+13:00")
+        f.action(self.site, "Moved this week", corrects=moved, due="2026-11-12", created=week, body="Pushed out.")
+        f.action(self.site, "Old work", created="2026-10-10T09:00:00+13:00")
+        out, _ = f.run("--save")
+        self.assertEqual(out["last_7_days"], {"new": 1, "done": 1, "cancelled": 1, "due_date_changed": 1})
+        text = self.page(out)
+        week_part = text[text.index('<details class="week">'):text.index("<h2>Needs attention")]
+        self.assertIn("<summary>Last 7 days: <strong>1</strong> new &middot; <strong>1</strong> done &middot; "
+                      "<strong>1</strong> cancelled &middot; <strong>1</strong> due date changed</summary>", week_part)
+        self.assertIn('<span class="tag">Done</span><span class="subj">Done this week</span>', week_part)
+        self.assertIn('<span class="tag">Cancelled</span><span class="subj">Cancelled this week</span>', week_part)
+        self.assertIn("Kowhai Books &rsaquo; Website &middot; was 1 Nov", week_part)
+        self.assertNotIn("Old work", week_part)
+        # One project's page counts only its own last 7 days; with nothing, it says so in one line.
+        self.assertEqual(f.run("--project", self.solo)[0]["last_7_days"], {"new": 0, "done": 0, "cancelled": 0, "due_date_changed": 0})
+        self.assertIn('<p class="week">Last 7 days: nothing new, done, cancelled or with a changed due date.</p>',
+                      self.page(f.run("--save", "--project", self.solo)[0]))
+
+    def test_work_recorded_two_ways_is_left_out_of_the_last_7_days(self):
+        f = self.f
+        first = f.action(self.budget, "Board pack", created="2026-10-29T09:00:00+13:00")
+        f.action(self.budget, "Board pack", corrects=first, body="One way.", created="2026-10-30T09:00:00+13:00")
+        f.action(self.budget, "Board pack", corrects=first, body="Another way.", created="2026-10-30T09:00:00+13:00")
+        out, _ = f.run()
+        self.assertEqual(out["last_7_days"]["new"], 0)
+
+    def test_every_jump_lands_on_a_row_and_rows_have_one_id_each(self):
+        f = self.f
+        f.action(self.client, "Client late", due="2026-10-30")
+        f.action(self.budget, "Budget today", due="2026-11-02")
+        f.action(self.solo, "Trust soon", due="2026-11-05")
+        for view in ([], ["--project", self.client]):
+            with self.subTest(view=view):
+                text = self.page(f.run("--save", *view)[0])
+                page = Page(text)
+                self.assertEqual(page.problems, [])  # no id twice, and no jump to a row that is not there
+                self.assertGreaterEqual(len(page.jumps), 2)
+                # A project with projects inside it jumps to the row of its own work.
+                self.assertIn('<a class="jump" href="#p-kowhai--own">', text)
+        person = self.page(f.run("--save", "--by-person")[0])
+        self.assertNotIn('class="jump"', person)  # by person has no project rows to jump to
+
+    def test_a_leftover_copy_of_a_saved_record_is_housekeeping_not_partial(self):
+        f = self.f
+        saved = f.action(self.budget, "Saved fine")
+        record = f.root / "Record" / f"{saved}.md"
+        leftover = f.root / "Record" / f".pace-tmp-{saved}-4242-a1b2c3d4"
+        leftover.write_bytes(record.read_bytes())
+        out, _ = f.run("--save")
+        self.assertTrue(out["complete"], out["could_not_read"])
+        self.assertEqual(len(out["housekeeping"]), 1)
+        self.assertIn(f"is a leftover copy of Record/{saved}.md from a save that finished", out["housekeeping"][0])
+        text = self.page(out)
+        self.assertIn("<dt>Housekeeping</dt>", text)
+        self.assertNotIn('class="partial"', text)
+        # A temporary file that differs from its record, or has none beside it, may be a save that did not finish.
+        leftover.write_text("half a record", encoding="utf-8")
+        out, _ = f.run("--save")
+        self.assertFalse(out["complete"])
+        self.assertIn('<p class="partial">', self.page(out))
+        leftover.unlink()
+        (f.root / "Record" / f".pace-tmp-20261025T999999Z--{self.budget}--zzzzzz-1-ffffffff").write_text("x", encoding="utf-8")
+        self.assertFalse(f.run()[0]["complete"])
+
+    def test_a_long_list_folds_its_undated_work_by_the_top_project(self):
+        f = self.f
+        for number in range(11):
+            f.action(self.budget if number % 2 else self.solo, f"Task {number}", owed_by=OWNER)
+        f.action(self.site, "Dated task", owed_by=OWNER, due="2026-11-20")
+        text = self.page(f.run("--save", "--by-person")[0])
+        self.assertIn('<p class="group">You owe, with a due date</p>', text)
+        self.assertIn('<summary>You owe, with no due date: Kowhai Books <span class="n">5</span></summary>', text)
+        self.assertIn('<summary>You owe, with no due date: Pohutu Trust <span class="n">6</span></summary>', text)
+        self.assertIn('<span class="side">Budget 2027</span>', text)  # inside a fold, only the projects below its top
+
+    def test_a_short_list_is_not_folded(self):
+        f = self.f
+        for number in range(3):
+            f.action(self.budget, f"Task {number}", owed_by=OWNER)
+        text = self.page(f.run("--save", "--by-person")[0])
+        self.assertIn('<p class="group">You owe, with no due date</p>', text)
+        self.assertNotIn('<details class="fold">', text)
+
+
+class ReviewTests(OverviewCase):
+    """Cases an independent review found."""
+
+    def test_the_one_project_facts_are_one_line_and_a_passed_target_stands_out(self):
+        f = self.f
+        f.record(self.budget, "change", "Budget 2027", "Ana leads.", owner="Ana Ruiz", target="2026-10-20", status="Drafting")
+        text = self.page(f.run("--save", "--project", self.budget)[0])
+        self.assertIn('<p class="known"><span>Part of <strong>Kowhai Books</strong></span>', text)
+        self.assertIn('<span>Target <strong class="late">20 Oct 2026, 13 days late</strong></span>', text)
+        self.assertNotIn('<p class="facts">', text)
+
+    def test_work_done_long_ago_and_reworded_this_week_is_not_done_this_week(self):
+        f = self.f
+        first = f.action(self.budget, "Old invoice", created="2026-08-01T09:00:00+13:00")
+        done = f.action(self.budget, "Old invoice", corrects=first, state="done", created="2026-08-10T09:00:00+13:00")
+        f.action(self.budget, "Old invoice (spelling)", corrects=done, state="done", created="2026-11-01T09:00:00+13:00")
+        self.assertEqual(f.run()[0]["last_7_days"]["done"], 0)
+
+    def test_a_due_date_changed_this_week_still_counts_after_a_later_rewording(self):
+        f = self.f
+        first = f.action(self.budget, "Board pack", due="2026-11-05", created="2026-10-10T09:00:00+13:00")
+        moved = f.action(self.budget, "Board pack", corrects=first, due="2026-11-20", created="2026-10-29T09:00:00+13:00")
+        f.action(self.budget, "Board pack, reworded", corrects=moved, due="2026-11-20", created="2026-10-31T09:00:00+13:00")
+        out, _ = f.run("--save")
+        self.assertEqual(out["last_7_days"]["due_date_changed"], 1)
+        self.assertIn("Kowhai Books &rsaquo; Budget 2027 &middot; was 5 Nov", self.page(out))
+
+    def test_a_project_with_work_recorded_two_ways_is_not_called_idle_on_its_parents_page(self):
+        f = self.f
+        f.action(self.budget, "Budget task")
+        first = f.action(self.site, "Site copy")
+        f.action(self.site, "Site copy", corrects=first, body="One way.")
+        f.action(self.site, "Site copy", corrects=first, body="Another way.")
+        text = self.page(f.run("--save", "--project", self.client)[0])
+        self.assertNotIn("No open work recorded: Website", text)
+        self.assertIn("Another way.", text)
+
+    def test_the_projects_heading_counts_only_projects_with_work_and_last_activity_takes_in_every_project_inside(self):
+        f = self.f
+        copy = f.project("kowhai-copy", "Copywriting", parent=self.site)
+        f.action(copy, "Copy task", created="2026-10-20T09:00:00+13:00")
+        archive = f.project("kowhai-archive", "Archive", parent=self.client)
+        f.record(archive, "decision", "Keep the archive", "Keep it.", created="2026-11-01T09:00:00+13:00")
+        text = self.page(f.run("--save", "--project", self.client)[0])
+        self.assertIn('<h2>Projects <span class="n">1 inside with open work, a target or a status</span></h2>', text)
+        every = self.page(f.run("--save")[0])
+        self.assertIn('<span class="last">Yesterday</span>', self.row(every, self.client))  # the archive's decision
+
+    def test_a_projects_own_work_on_its_own_page_names_no_project_and_jumps_to_its_row(self):
+        f = self.f
+        f.action(self.client, "Client late", due="2026-10-30")
+        f.action(self.budget, "Budget task")
+        text = self.page(f.run("--save", "--project", self.client)[0])
+        attention = text[text.index("<h2>Needs attention"):text.index("<h2>Projects")]
+        self.assertIn('<span class="subj">Client late</span><span class="side"></span>', attention)
+        self.assertIn('<a class="jump" href="#p-kowhai--own">Go to its row</a>', attention)
+        self.assertEqual(Page(text).problems, [])
+
+    def test_the_owners_name_matches_however_its_accents_and_spaces_are_written(self):
+        f = self.f
+        f.action(self.budget, "Mine", owed_by="Rangi  Pa\u0304rata")  # a combining macron and a doubled space
+        out, _ = po.run(po.build_parser().parse_args(["--pace", str(f.root), "--as-at", AS_AT, "--owner", "Rangi P\u0101rata"]))
+        self.assertEqual(out["counts"]["waiting_on_you"], 1)
+
+    def test_input_too_deep_or_too_near_the_calendar_edge_gives_one_plain_result(self):
+        f = self.f
+        parent = "none"
+        for number in range(1100):
+            folder = f.root / "1 Projects" / f"Deep {number}"
+            folder.mkdir()
+            (folder / "Pace project.md").write_text(
+                f"---\nformat: project-1\nid: deep-{number}\nparent: {parent}\ncreated: 2026-10-20T09:00:00+13:00\nby: Hand\n---\n",
+                encoding="utf-8")
+            parent = f"deep-{number}"
+        f.action("deep-1099", "Deepest work")
+        out, code = f.run()
+        self.assertIn(out["status"], ("made", "not-made"))
+        self.assertTrue(out["message"])
+        edge, code = po.run(po.build_parser().parse_args(["--pace", str(f.root), "--as-at", "9999-12-31T23:30:00-13:00"]))
+        self.assertEqual((edge["status"], code), ("not-made", 1))
+
+    def test_a_customised_template_says_so_when_the_shipped_styles_cannot_stand_in(self):
+        f = self.f
+        shipped = (f.root / "Product/Pace add-ins/Project overview/overview-template.html").read_text(encoding="utf-8")
+        older = Path(self._temp.name) / "older-template.html"
+        older.write_text(shipped.replace(".node", ".project").replace(".row", ".item-row"), encoding="utf-8")
+        real = Path.read_text
+
+        def unreadable(path, *args, **kwargs):
+            if path.name == "overview-template.html" and "Pace add-ins" in str(path) and path != older:
+                raise PermissionError("Permission denied")
+            return real(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", unreadable):
+            out, _ = f.run("--template", str(older))
+        self.assertIn("the shipped template's styles could not be read, so the page may look unstyled", out["message"])
 
 
 class HonestyTests(OverviewCase):
@@ -690,10 +915,10 @@ class HonestyTests(OverviewCase):
 
     def test_missing_folders_stop_it_and_nothing_is_written(self):
         self.f.action(self.budget, "Any", due="2026-10-30")
-        shutil.rmtree(self.f.root / "Views")
+        shutil.rmtree(self.f.root / "2 Views")
         out, code = self.f.run("--save")
         self.assertEqual((out["status"], code, out["page"]), ("not-saved", 1, None))
-        self.assertIn("Views/ was not found", out["message"])
+        self.assertIn("2 Views/ was not found", out["message"])
         self.assertEqual(out["counts"]["overdue"], 1)  # the overview was made, so the chat can still give it
         shutil.rmtree(self.f.root / "Record")
         out, code = self.f.run()
@@ -702,7 +927,7 @@ class HonestyTests(OverviewCase):
     def test_a_half_written_page_is_placed_but_not_confirmed(self):
         with mock.patch.object(po.pr, "place_new", side_effect=po.pr.PartialPlacement("No space left on device")):
             out, code = self.f.run("--save")
-        self.assertEqual((out["status"], code, out["page"]), ("placed-not-confirmed", 1, "Views/2026-11-02-project-overview.html"))
+        self.assertEqual((out["status"], code, out["page"]), ("placed-not-confirmed", 1, "2 Views/2026-11-02-project-overview.html"))
         self.assertIn("may be incomplete", out["message"])
 
     def test_a_page_that_reads_back_differently_is_placed_but_not_confirmed(self):
@@ -753,7 +978,7 @@ class HonestyTests(OverviewCase):
         self.f.action(self.budget, "Any")
         out, code = self.f.run()
         self.assertEqual((out["status"], code, out["page"]), ("made", 0, None))
-        self.assertEqual(list((self.f.root / "Views").glob("*.html")), [])
+        self.assertEqual(list((self.f.root / "2 Views").glob("*.html")), [])
 
     def test_the_command_line_prints_one_result_and_leaves_no_cache_files(self):
         stdout = io.StringIO()

@@ -5,7 +5,7 @@ Projects keep the owner's work in order. A project can sit inside a **parent pro
 ## How projects are laid out
 
 ```text
-Projects/
+1 Projects/
   Kowhai Books/                 <- parent project (a client), id kowhai-books
     Pace project.md
     Budget 2027/                <- project inside it, id kowhai-budget
@@ -85,11 +85,11 @@ Listing projects reports, rather than guesses:
 - a project whose `parent` does not match the folder it sits in;
 - a `Pace project.md` that cannot be read;
 - folders with no `Pace project.md`, which are simply not projects yet. One that holds a project somewhere inside is not listed itself, but the project inside is reported; a folder inside a listed one is not listed again. Folders whose names start with a dot, such as `.git`, are left out unless they hold a `Pace project.md`, and so is a project's `Documents/` folder, whatever the case of its name;
-- a folder that cannot be read, or one with no `Pace project.md` that holds more than 500 folders, which is named rather than taken as empty. So that every command stays quick, no more than 5,000 folders with no `Pace project.md` are looked into in all, and nothing more than 40 levels below `Projects/`; anything past either is named too. A new project's folder name cannot start with a dot, since that hides the folder on some computers.
+- a folder that cannot be read, or one with no `Pace project.md` that holds more than 500 folders, which is named rather than taken as empty. So that every command stays quick, no more than 5,000 folders with no `Pace project.md` are looked into in all, and nothing more than 40 levels below `1 Projects/`; anything past either is named too. A new project's folder name cannot start with a dot, since that hides the folder on some computers.
 
 A record whose project id has no matching folder is still shown, with that gap named.
 
-Whenever projects are listed, for example when making a project, in a project overview or in a daily brief, name any folder that has no `Pace project.md` and ask the owner what it is. A folder directly in `Projects/` can be made a project, or left as it is. A folder beside `Documents/` inside a project can be made a project inside it, or moved into its `Documents/`. Make or move nothing without the owner's yes.
+Whenever projects are listed, for example when making a project, in a project overview or in a daily brief, name any folder that has no `Pace project.md` and ask the owner what it is. A folder directly in `1 Projects/` can be made a project, or left as it is. A folder beside `Documents/` inside a project can be made a project inside it, or moved into its `Documents/`. Make or move nothing without the owner's yes.
 
 ## Documents and versions
 
@@ -119,7 +119,7 @@ Documents/
 With the record tool, `--source-file` adds the copy's place and fingerprint, and `find` lists the versions newest first:
 
 ```text
-python3 Product/Tools/pace_record.py create --request <request> --project kowhai-budget --kind result --subject "Budget 2027" --from owner --words "The budget went to the board this morning." --source-file "Projects/Kowhai Books/Budget 2027/Documents/Archive/2026-11-04 Budget 2027 v1.xlsx" --by "Claude Code" --body "Version 1 of the 2027 budget went to the board on 4 November."
+python3 Product/Tools/pace_record.py create --request <request> --project kowhai-budget --kind result --subject "Budget 2027" --from owner --words "The budget went to the board this morning." --source-file "1 Projects/Kowhai Books/Budget 2027/Documents/Archive/2026-11-04 Budget 2027 v1.xlsx" --by "Claude Code" --body "Version 1 of the 2027 budget went to the board on 4 November."
 python3 Product/Tools/pace_record.py find --project kowhai-budget --kind result --subject "Budget 2027"
 ```
 

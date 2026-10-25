@@ -1,10 +1,10 @@
 # Repository references and coding sessions
 
-A repository is a place for code. `Repos/` holds **references**, not copied code or passwords. Keep the actual checkout outside a synced Pace folder. A repository has exactly one home project, identified by its stable id in `Projects/`; its folder name can change without changing that association.
+A repository is a place for code. `Repos/` holds **references**, not copied code or passwords. Keep the actual checkout outside a synced Pace folder. A repository has exactly one home project, identified by its stable id in `1 Projects/`; its folder name can change without changing that association.
 
 ## One home per repository
 
-Mirror the project's place in `Projects/`: for a project inside a parent (often a client), use `Repos/<parent>/<project>/<repo>/Pace repo.md`, with one more folder for each level a project sits below that. For a standalone project use `Repos/<project>/<repo>/Pace repo.md`. Match the folder names in `Projects/`. For example:
+Mirror the project's place in `1 Projects/`: for a project inside a parent (often a client), use `Repos/<parent>/<project>/<repo>/Pace repo.md`, with one more folder for each level a project sits below that. For a standalone project use `Repos/<project>/<repo>/Pace repo.md`. Match the folder names in `1 Projects/`. For example:
 
 ```text
 Repos/Imaginary Orchard/Website/website-code/Pace repo.md

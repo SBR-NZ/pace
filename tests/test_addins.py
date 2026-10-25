@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACE_FOLDER = ROOT / "PACE"
 YOUR_LINES = "<!-- Your lines go below this one. Pace updates never change them. -->"
 SHIPPED = Path("Product/Pace add-ins")
-MY_ADD_INS = Path("My add-ins")
+MY_ADD_INS = Path("3 My add-ins")
 OLDER_MY_ADD_INS = Path("Pace/Add-ins/My add-ins")  # where an older folder keeps them
 HELP = PACE_FOLDER / "Product/Help/add-ins.md"
 
@@ -312,10 +312,10 @@ class CustomisedCopyLinkTests(unittest.TestCase):
                     if "Help/" in link:
                         self.assertEqual((copy / link).resolve(), (folder.root / "Product" / link.split("Product/", 1)[1]).resolve())
                 self.assertNotIn(old, add_in.read_text(encoding="utf-8"))
-                # Files copied beside ADD-IN.md carry no other relative link.
+                # Files copied beside ADD-IN.md carry no other relative link; a jump within the same page is not one.
                 for other in copy.rglob("*"):
                     if other.is_file() and other != add_in:
-                        self.assertNotRegex(other.read_text(encoding="utf-8"), r"\]\(|href=|src=")
+                        self.assertNotRegex(other.read_text(encoding="utf-8"), r"\]\(|href=(?!\"#)|src=")
 
     def test_launchers_in_a_copy_still_point_to_the_index_and_the_index_line_opens_the_copy(self):
         old, new = self.documented_link_change()
@@ -338,7 +338,7 @@ class CustomisedCopyLinkTests(unittest.TestCase):
                 self.assertTrue((folder.root / index_path).is_file())
 
     def test_every_link_example_in_the_help_resolves_from_a_copy_in_my_add_ins(self):
-        """Each "change `A` to `B`" link example: B opens Product/Help from My add-ins/<name>/, A from where the copy was."""
+        """Each "change `A` to `B`" link example: B opens Product/Help from 3 My add-ins/<name>/, A from where the copy was."""
         text = HELP.read_text(encoding="utf-8")
         link_change = re.compile(r"change `(\.\./[^`]*)` to `(\.\./[^`]*)`")
         came_from = {"Customising a shipped add-in": SHIPPED, "Add-ins in an older folder": OLDER_MY_ADD_INS}

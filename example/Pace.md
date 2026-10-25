@@ -16,10 +16,14 @@ None yet.
 
 ## Where things belong
 
-- `Product/` - versioned help and shipped add-ins in `Product/Pace add-ins/`.
+The numbered folders are the ones people open, so they sort above Pace's other folders.
+
+- `1 Projects/` - projects, each with its files in `Documents/`. In `Documents/`, each piece of work has one working file, under the same name at the top of its folder; when a version is sent, presented, filed or signed off, keep a dated copy in `Archive/` beside it. The detail is in [Documents and versions](Product/Help/projects.md#documents-and-versions).
+- `2 Views/` - dated pages made from the records, such as the project overview; snapshots, never a second record.
+- `3 My add-ins/` - owner-made or customised add-ins (separate from Product).
 - `Record/` - the owner's memory: decisions, actions, notes and figures. When the owner asks what you remember or have in memory, search here, not the assistant's own memory feature.
-- `Projects/` - projects, each with its files in `Documents/`; `Repos/` - repository references (this copy holds invented work in each). In `Documents/`, each piece of work has one working file, under the same name at the top of its folder; when a version is sent, presented, filed or signed off, keep a dated copy in `Archive/` beside it. The detail is in [Documents and versions](Product/Help/projects.md#documents-and-versions).
-- `My add-ins/` - owner-made or customised add-ins (separate from Product).
+- `Repos/` - repository references, mirroring each project's place in `1 Projects/`.
+- `Product/` - versioned help and shipped add-ins in `Product/Pace add-ins/`. Pace's own; updates replace it.
 - `Release record/` - where releases come from, the installed release and install receipts, outside Product (this copy holds an invented release record).
 
 ## Rounding up
@@ -47,4 +51,4 @@ Time zone: Pacific/Auckland
 - [Add-ins](Product/Help/add-ins.md) - switching add-ins on, customising them and making your own.
 - [Product updates](Product/Help/updates.md) - to check for an update, read `Release record/Installed release.md`, then preview the newest release; installing needs the owner's go-ahead.
 - [Assistants and dated views](Product/Help/hosts-and-views.md) - what hosts can actually do and optional pages over records.
-<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=1ab3bbdd6370 rounding-up=338f8a57f6ab add-in-index=397a2d303e69 time-zone=01475f79d218 help-when-relevant=e036336592a8 -->
+<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=e025c0b03fb6 rounding-up=338f8a57f6ab add-in-index=397a2d303e69 time-zone=01475f79d218 help-when-relevant=e036336592a8 -->

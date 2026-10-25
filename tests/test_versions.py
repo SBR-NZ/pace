@@ -30,7 +30,7 @@ def versions_section():
 def pace_md_rule(root):
     """The working-file sentence on the Projects line of a Pace.md."""
     text = (root / "Pace.md").read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if l.startswith("- `Projects/` - projects"))
+    line = next(l for l in text.splitlines() if l.startswith("- `1 Projects/` - projects"))
     return line[line.index("In `Documents/`"):]
 
 

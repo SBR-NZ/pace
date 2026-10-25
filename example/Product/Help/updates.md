@@ -17,11 +17,24 @@ If the note is missing or cannot be read, the updater says so and does not guess
 ## What an update never changes
 
 - Your lines in `Pace.md`: everything below a "Your lines" mark, such as the add-in index lines, standing instructions and the time zone line, any part of `Pace.md` you have changed, and any section you added. See [Pace.md](#pacemd) below.
-- `Record/`, `Projects/`, `Repos/` and optional `Views/`.
-- `My add-ins/`, so your own and customised add-ins, and `Pace/Add-ins/My add-ins/` in an older folder that still keeps them there. An update never moves them; [Add-ins](add-ins.md#add-ins-in-an-older-folder) says how to move them to `My add-ins/` if the owner wants to.
+- `Record/`, `1 Projects/`, `Repos/` and optional `2 Views/`.
+- `3 My add-ins/`, so your own and customised add-ins, and `Pace/Add-ins/My add-ins/` in an older folder that still keeps them there. An update never moves them; [Add-ins](add-ins.md#add-ins-in-an-older-folder) says how to move them to `3 My add-ins/` if the owner wants to.
 - The host pointers `AGENTS.md`, `CLAUDE.md` and `.github/copilot-instructions.md`.
 
-Shipped add-ins in `Product/Pace add-ins/` update with Product. A customised copy in `My add-ins` never does; you can ask to compare it with the new shipped version and adopt what you want. If a release removes a Product file that `Pace.md` points to, the preview says so and you decide what to use instead.
+Shipped add-ins in `Product/Pace add-ins/` update with Product. A customised copy in `3 My add-ins` never does; you can ask to compare it with the new shipped version and adopt what you want. If a release removes a Product file that `Pace.md` points to, the preview says so and you decide what to use instead.
+
+## Folder names from 3.11.0
+
+From release 3.11.0 the folders people open are numbered, so they sort above Pace's other folders: `Projects/` is `1 Projects/`, `Views/` is `2 Views/` and `My add-ins/` is `3 My add-ins/`. An update never moves your folders, so before installing 3.11.0 or later into a folder that still has the old names, rename them yourself, or ask the assistant to with your go-ahead:
+
+1. Close any file open from those folders, and let OneDrive or your sync finish.
+2. Rename `Projects` to `1 Projects`, `Views` to `2 Views` and `My add-ins` to `3 My add-ins`, exactly so, with one space after each number. If a numbered folder is already there, move what is in the old folder into it, then remove the empty old folder.
+3. In `Pace.md`, change any line of your own that names an old folder, such as an add-in index line for a customised copy, from `My add-ins/` to `3 My add-ins/`.
+4. Pin `1 Projects` and `2 Views` again if you had pinned the old folders, and update any shortcut or script of your own that names them.
+
+Nothing else changes: projects keep their ids, and records saved before 3.11.0 keep the folder names they were saved with, which the record tool still finds in the numbered folders. Paths inside the renamed folders get 2 characters longer, which matters only for a path already near the limit that [Projects](projects.md#long-paths) describes.
+
+From 3.11.0 the updater checks the folder names itself: until they are renamed, its preview lists what to do and both `prepare` and the install stop before changing anything. An updater from before 3.11.0 does not know about the rename and would install the release over the old names, after which the record tool says which folders to rename. So rename the folders first, or run the new release's own updater as under [Running it](#running-it). Going back to a release from before 3.11.0 needs the old names back, and the updater says so in the same way.
 
 ## Pace.md
 
@@ -80,7 +93,7 @@ Copilot's OneDrive connection can create new files but cannot replace existing o
 - **An update finished but left its work files**, for example because OneDrive or a virus scanner held a file open while they were being removed: the install, or its roll-back, is complete and recorded. Preview says so. Once nothing holds the files open, run apply with only the Pace folder named to tidy them.
 - **The updater stops with a file error on a folder it may not read**, such as the Claude desktop app's own `Claude/` folder seen from the app's Linux sandbox: nothing was installed. From 3.9.1 the updater names such a folder as not checked and goes on. If the installed updater is older, install with the new release's own updater, as described under Running it for older folders.
 - **The updater says it needs help:** it could not confirm the roll-back, or it found work files it cannot account for. The Product from before the update may be in `Release record/Update in progress/previous/Product`. Leave everything there and ask whoever supports your Pace setup.
-- **Files inside Product were edited:** Product is replaced as a whole, so the updater stops and lists them. In a folder made by `get-pace.py` that has not been updated since, it can say only that files changed, not which, because the release note keeps a fingerprint rather than a file list. Copy anything worth keeping into `My add-ins` first, or say you are happy for them to be replaced. If `Installed release.md` keeps no Product file list, which happens only when it was written by hand, the updater cannot tell whether anything was edited. It says so and asks for the same choice, unless Product already holds exactly the new release.
+- **Files inside Product were edited:** Product is replaced as a whole, so the updater stops and lists them. In a folder made by `get-pace.py` that has not been updated since, it can say only that files changed, not which, because the release note keeps a fingerprint rather than a file list. Copy anything worth keeping into `3 My add-ins` first, or say you are happy for them to be replaced. If `Installed release.md` keeps no Product file list, which happens only when it was written by hand, the updater cannot tell whether anything was edited. It says so and asks for the same choice, unless Product already holds exactly the new release.
 
 ## What these checks do and do not show
 

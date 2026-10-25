@@ -27,9 +27,9 @@ spec.loader.exec_module(get)
 NOTE = Path("Release record/Installed release.md")
 OWNER_FILES = {
     "Record/20261023T090000Z--invented-bakery--job001.md": "Invented record.\n",
-    "Projects/Invented Bakery/Forecast/Pace project.md": "Project id: invented-forecast\n",
+    "1 Projects/Invented Bakery/Forecast/Pace project.md": "Project id: invented-forecast\n",
     "Repos/Invented Bakery/Forecast/forecast-code/Pace repo.md": "Link: https://example.invalid/forecast\n",
-    "My add-ins/Daily brief - mine/ADD-IN.md": "# Daily brief - mine\n",
+    "3 My add-ins/Daily brief - mine/ADD-IN.md": "# Daily brief - mine\n",
 }
 
 

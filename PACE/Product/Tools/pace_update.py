@@ -69,10 +69,13 @@ CHECK_PREFIX = ".pace-update-check-"
 CHECK_NOTE = (b"Pace Product updater check: this folder lets files be renamed and deleted. This file is harmless\n"
               b"and Pace does not use it. Anyone with delete rights can delete it.\n")
 SHIPPED_ADDINS = "Pace add-ins/"
-OWNER_ADDINS = "My add-ins"
+OWNER_ADDINS = "3 My add-ins"
+# Release 3.11.0 numbered the folders people open. The updater never moves an owner's folders, so before it installs a
+# release that has the numbered names, the owner renames the old ones, as updates help describes.
+RENAMED_FOLDERS = {"Projects": "1 Projects", "Views": "2 Views", "My add-ins": OWNER_ADDINS}
 OLDER_OWNER_ADDINS = "Pace/Add-ins/My add-ins"  # where older folders keep them; still listed and protected
 HOST_POINTERS = ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md")
-PROTECTED = ("Pace.md", "Record/", "Projects/", "Repos/", "Views/", OWNER_ADDINS + "/", OLDER_OWNER_ADDINS + "/") + HOST_POINTERS
+PROTECTED = ("Pace.md", "Record/", "1 Projects/", "Repos/", "2 Views/", OWNER_ADDINS + "/", OLDER_OWNER_ADDINS + "/") + HOST_POINTERS
 # Small owner files whose bytes are compared, not just their size and time.
 HASHED_OWNER_FILES = ("Pace.md",) + HOST_POINTERS
 
@@ -464,10 +467,17 @@ def fetch_release(repo: str, tag: str, commit: str | None, *, folder: str = PROD
         _check_paths(path for path, _ in wanted)
         files = _read_blobs(git, wanted, repo)
         pace_md = None
+        pace_folders: list = []
         if source == PRODUCT_IN_REPO:
             oid = _git_out(git + ["rev-parse", "--verify", "--quiet", f"{target}:{PACE_MD_TEMPLATE}"])
             if oid and _git_out(git + ["cat-file", "-t", oid]) == "blob":
                 pace_md = _read_blobs(git, [(PACE_MD_TEMPLATE, oid)], repo)[PACE_MD_TEMPLATE]
+            top = _git(git + ["ls-tree", "-z", target, "PACE/"])
+            if top.returncode == 0:
+                for raw in top.stdout.split(b"\0"):
+                    meta, _, raw_path = raw.partition(b"\t")
+                    if b" tree " in meta:
+                        pace_folders.append(raw_path.decode("utf-8").rsplit("/", 1)[-1])
     finally:
         _remove_tree(store_parent)
     entries = {path: (len(data), _sha256(data)) for path, data in files.items()}
@@ -480,7 +490,92 @@ def fetch_release(repo: str, tag: str, commit: str | None, *, folder: str = PROD
         "files": files,
         "entries": entries,
         "pace_md": pace_md,
+        "pace_folders": sorted(pace_folders),
     }
+
+
+# A folder named as before 3.11.0 at the start of a path, as in `My add-ins/My voice/ADD-IN.md` or "in Projects/",
+# but not a numbered name such as 1 Projects/ or the older Pace/Add-ins/My add-ins/.
+OLD_FOLDER_PATH = re.compile(r"(?<![\w/.-])(?<!\d )(?:Projects|Views|My add-ins)/")
+LEFT_BEHIND = {".gitkeep", "desktop.ini", ".ds_store", "thumbs.db"}  # files systems leave in an emptied folder
+
+
+def _has_content(folder: Path) -> bool:
+    """True when a folder holds anything but the files systems leave behind; one that cannot be listed counts as full."""
+    try:
+        with os.scandir(folder) as entries:
+            return any(entry.name.lower() not in LEFT_BEHIND for entry in entries)
+    except OSError:
+        return True
+
+
+def folder_renames(root: Path, release: dict) -> list:
+    """The owner's folders to sort out before this release is installed, each as {"from", "to", "do"}.
+
+    A release with the numbered folder names (3.11.0 or later) needs any folder still named as before renamed, or
+    its contents moved when both names exist. An earlier release needs the numbered folders named back, because its
+    tools look for the older names. An empty folder left under the other name is harmless and not listed."""
+    shipped = set(release.get("pace_folders") or ())
+    steps = []
+    for old, new in RENAMED_FOLDERS.items():
+        if new in shipped:
+            have, want = old, new
+        elif old in shipped:
+            have, want = new, old
+        else:
+            continue
+        source, target = root / have, root / want
+        if not source.is_dir():
+            continue
+        if not target.exists() and not target.is_symlink():
+            step = f"rename {have}/ to {want}/"
+        elif not target.is_dir():
+            step = f"{want} is a file, not a folder: move it aside, then rename {have}/ to {want}/"
+        elif _has_content(source):
+            step = f"move what is in {have}/ into {want}/, then remove the empty {have}/"
+        else:
+            continue
+        steps.append({"from": have, "to": want, "do": step})
+    return steps
+
+
+def old_folder_lines(root: Path, plan: dict) -> list:
+    """Lines Pace.md would still have after this install that name a folder as it was named before 3.11.0, such as
+    an add-in index line for a customised copy. Only a release with the numbered names makes them out of date."""
+    if not set(RENAMED_FOLDERS.values()) & set(plan["release"].get("pace_folders") or ()):
+        return []
+    data = plan["pace_md"].get("after")
+    try:
+        if data is None:
+            data = (root / "Pace.md").read_bytes()
+        text = data.decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [line.strip() for line in text.splitlines() if OLD_FOLDER_PATH.search(line)]
+
+
+def old_lines_message(lines: list) -> str:
+    said = "; ".join(f'"{line}"' for line in lines)
+    return f"Pace.md still names folders as they were named before 3.11.0 in these lines, so change each to the numbered name, such as 3 My add-ins/ for My add-ins/: {said}."
+
+
+def renames_message(steps: list, lines: list) -> str:
+    """What to do, in full, before a release can be installed over folders with the other names. The steps are given
+    here because the installed help may be older than the release that needs them."""
+    said = "; ".join(step["do"] for step in steps)
+    if steps[0]["to"] in RENAMED_FOLDERS.values():
+        start = ("This release numbers the folders people open, and an update never moves your folders. Before it is "
+                 "installed, close any file open from them, let OneDrive or your sync finish, then in the Pace folder: ")
+        end = (" Nothing else changes: projects keep their ids, and records saved before keep working. Paths inside "
+               "the renamed folders get 2 characters longer. The release's help, under Folder names from 3.11.0, "
+               "says more.")
+    else:
+        start = ("This release is from before 3.11.0, and its tools look for the folder names from then. An update "
+                 "never moves your folders, so before it is installed, close any file open from them, let OneDrive or "
+                 "your sync finish, then in the Pace folder: ")
+        end = ""
+    then = f" Then: {old_lines_message(lines)}" if lines else ""
+    return start + said + "." + then + " Then preview again." + end
 
 
 def _read_blobs(git: list, wanted: list, repo: str) -> dict:
@@ -1251,6 +1346,14 @@ def preview(root, repo: str, tag: str, commit: str | None = None, *, upstream: d
         "(use prepare, then confirm), or their own words naming both."
     )
     result["message"] = "This is a preview. Nothing has been installed or recorded."
+    renames = folder_renames(folder, release)
+    lines = old_folder_lines(folder, plan)
+    if renames:
+        result["folders_to_rename"] = renames
+        result["message"] += " " + renames_message(renames, lines) + " The install stops until then."
+    elif lines:
+        result["pace_md_old_folder_lines"] = lines
+        result["message"] += " After the install: " + old_lines_message(lines)
     if not release["pinned"]:
         result["message"] += (" The commit was not pinned: confirm it with whoever published the release, "
                               "then give it with --commit.")
@@ -1287,6 +1390,9 @@ def prepare(root, repo: str, tag: str, commit: str, *, upstream: dict | None = N
     if not (folder / "Pace.md").is_file():
         raise Stop("A local proposal needs a person's Pace.md; central copies use IT change control.")
     plan = _plan(folder, repo, tag, check_commit_id(commit), upstream, expect_digest)
+    renames = folder_renames(folder, plan["release"])
+    if renames:
+        raise Stop(renames_message(renames, old_folder_lines(folder, plan)) + " No proposal was saved.")
     content = _install_act(folder, plan)
     location = folder / RELEASE_RECORD / PROPOSALS
     path = _new_file_path(location, f"{_stamp(_now())}-{_safe_name(tag)}", ".json")
@@ -1688,6 +1794,9 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
 
     plan = _plan(folder, repo, tag, commit, upstream, expect_digest)
     release = plan["release"]
+    renames = folder_renames(folder, release)
+    if renames:
+        raise Stop(renames_message(renames, old_folder_lines(folder, plan)) + " Nothing was installed.")
     if confirmation_request:
         confirmation_ref = _check_confirmation(folder, confirmation_request, _install_act(folder, plan))
     if plan["already_installed"]:
@@ -1863,6 +1972,7 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
     note_warning = _note_install(folder, journal)
     _checkpoint("noted")
     pace_md = update_pace_md(folder, plan["pace_md"])
+    lines = old_folder_lines(folder, plan) if pace_md.get("status") != "not updated" else []
     result = {"command": "apply", "status": "installed", "installed": True, "changed": True,
               **_public(plan), "record": f"{RELEASE_RECORD}/{written}",
               "owner_go_ahead": journal["owner_go_ahead"], "confirmation": confirmation_ref,
@@ -1876,7 +1986,9 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
     result["pace_md"] = pace_md
     if pace_md.get("status") in ("updated", "not updated"):
         result["message"] += " " + pace_md["message"]
-    warning = _join(note_warning, pace_md.get("warning"), _tidy(work))
+    if lines:
+        result["pace_md_old_folder_lines"] = lines
+    warning = _join(note_warning, pace_md.get("warning"), _tidy(work), old_lines_message(lines) if lines else None)
     if warning:
         result["warning"] = warning
     return result

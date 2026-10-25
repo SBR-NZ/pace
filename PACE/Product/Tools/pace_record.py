@@ -36,7 +36,9 @@ except ImportError:  # Python 3.8 cannot read time zones
 RECORD_FORMAT = "record-1"
 PROJECT_FORMAT = "project-1"
 RECORD_DIR = "Record"
-PROJECTS_DIR = "Projects"
+PROJECTS_DIR = "1 Projects"
+# Release 3.11.0 numbered the folders people open, so they sort above Pace's other folders. Records saved before then name them as they were.
+RENAMED_FOLDERS = {"Projects": PROJECTS_DIR, "Views": "2 Views", "My add-ins": "3 My add-ins"}
 WORKING_DIR = "Documents"
 ARCHIVE_DIR = "Archive"  # made beside a working file when a first version goes out, never with a project
 PROJECT_FILE = "Pace project.md"
@@ -607,11 +609,11 @@ def summary(item: dict, full: bool) -> dict:
 
 MAX_FOLDERS_INSIDE_UNNAMED = 500  # folders looked at inside one folder with no id before the rest are named as not checked
 MAX_UNNAMED_FOLDERS = 5000        # folders with no id looked into in all, so every command stays quick
-MAX_PROJECT_DEPTH = 40            # folder levels below Projects/ ever looked at
+MAX_PROJECT_DEPTH = 40            # folder levels below 1 Projects/ ever looked at
 
 
 def scan_projects(pace: Path):
-    """Read project identity files under Projects/, at any depth.
+    """Read project identity files under 1 Projects/, at any depth.
 
     A project's own projects are folders beside its Documents/. A folder with no Pace project.md that
     holds no project is listed for the owner to ask about, unless it sits inside another such folder; a
@@ -622,7 +624,11 @@ def scan_projects(pace: Path):
     base = pace / PROJECTS_DIR
     projects, issues, unlabelled = [], [], []
     if not base.is_dir():
-        return projects, [{"type": "missing-folder", "message": f"{PROJECTS_DIR}/ was not found in this Pace folder."}], unlabelled
+        return projects, [{"type": "missing-folder",
+                           "message": f"{PROJECTS_DIR}/ was not found in this Pace folder.{old_folder_names(pace)}"}], unlabelled
+    if old_folder_steps(pace):
+        # Projects kept under an old name are not read, so their ids could be reused: say so every time.
+        issues.append({"type": "old-folder-names", "message": "Not every folder was read." + old_folder_names(pace)})
 
     def not_read(folder: Path, error, what="listed") -> None:
         where = rel(pace, folder)
@@ -715,7 +721,7 @@ def scan_projects(pace: Path):
         """Read the projects inside folder. Returns "project" when a project is inside, "unknown" when something
         could not be checked and no project was found, and "none" otherwise.
 
-        named is True for Projects/ and for a project: the folders with no id inside them that hold no project
+        named is True for 1 Projects/ and for a project: the folders with no id inside them that hold no project
         are listed for the owner, as are those inside a folder with no id that holds a project. budget counts
         the folders looked at inside one outermost folder with no id."""
         if depth > MAX_PROJECT_DEPTH:
@@ -801,7 +807,7 @@ def unknown_project_issues(pace: Path, records: list) -> list:
         if project and project != NO_PROJECT and project not in known:
             missing.setdefault(project, []).append(record["request"])
     return [{"type": "unknown-project", "project": project, "requests": sorted(requests),
-             "message": f"Project {project} is used by {len(requests)} record(s) here but has no folder with that id under {PROJECTS_DIR}/."}
+             "message": f"Project {project} is used by {len(requests)} record(s) here but has no folder with that id under {PROJECTS_DIR}/.{old_folder_names(pace)}"}
             for project, requests in sorted(missing.items())]
 
 
@@ -987,7 +993,7 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
         return result("not-saved", f"Not saved: {RECORD_DIR}/ was not found in {pace}. Check the Pace folder and that it is available here.", False, request=request)
     project = one(fields, "project")
     if project != NO_PROJECT and not args.allow_unknown_project and project not in project_ids(pace):
-        return result("not-saved", f"Not saved: project {project} is not defined under {PROJECTS_DIR}/. Create the project first, use 'none', or check the id.", False, request=request)
+        return result("not-saved", f"Not saved: project {project} is not defined under {PROJECTS_DIR}/. Create the project first, use 'none', or check the id.{old_folder_names(pace)}", False, request=request)
 
     path = record_dir / f"{request}.md"
     file_rel = f"{RECORD_DIR}/{request}.md"
@@ -1419,15 +1425,59 @@ def act_location(pace: Path, path: str) -> str:
     return rel(pace, given_file(pace, path))
 
 
+def recorded_path(pace: Path, recorded: str) -> Path:
+    """A path a record wrote, from the Pace folder. One written before 3.11.0 under a folder that has since been
+    numbered, such as Projects/, still finds its file in the numbered folder, so older records never need changing."""
+    path = Path(recorded)
+    if not path.is_absolute() and path.parts and path.parts[0] in RENAMED_FOLDERS and not (pace / path).exists():
+        path = Path(RENAMED_FOLDERS[path.parts[0]], *path.parts[1:])
+    return (pace / path).resolve()
+
+
+def has_content(folder: Path) -> bool:
+    """True when a folder holds anything but the files systems leave behind; one that cannot be listed counts as full."""
+    try:
+        with os.scandir(folder) as entries:
+            return any(entry.name.lower() not in IGNORED_NAMES for entry in entries)
+    except OSError:
+        return True
+
+
+def old_folder_steps(pace: Path) -> list:
+    """What to do about each folder still named as before 3.11.0: rename it, or move what is in it when both exist."""
+    steps = []
+    for name, new in RENAMED_FOLDERS.items():
+        old, numbered = pace / name, pace / new
+        if not old.is_dir():
+            continue
+        if not numbered.exists():
+            steps.append(f"rename {name}/ to {new}/")
+        elif not numbered.is_dir():
+            steps.append(f"{new} is a file, not a folder: move it aside, then rename {name}/ to {new}/")
+        elif has_content(old):
+            steps.append(f"move what is in {name}/ into {new}/, then remove the empty {name}/")
+    return steps
+
+
+def old_folder_names(pace: Path) -> str:
+    """A sentence naming folders still called what they were before 3.11.0 and what to do, or "" when there are none."""
+    steps = old_folder_steps(pace)
+    if not steps:
+        return ""
+    return (" This Pace folder still has folders named as before release 3.11.0: " + "; ".join(steps) +
+            ". Updates help, under Folder names from 3.11.0, gives the steps.")
+
+
 def confirmation_file(pace: Path, recorded: str) -> Path:
     # A recorded relative path always starts from the Pace folder.
-    return (pace / recorded).resolve()
+    return recorded_path(pace, recorded)
 
 
 def check_act(pace: Path, fields: dict, path: str | None = None) -> str | None:
     recorded = one(fields, "act-file")
     expected = confirmation_file(pace, recorded)
-    if path and given_file(pace, path) != expected:
+    supplied = given_file(pace, path) if path and Path(path).expanduser().is_absolute() else recorded_path(pace, path) if path else None
+    if path and supplied != expected:
         return "The supplied act file is not the one named in the record."
     try:
         current = sha256(act_bytes(expected))
@@ -1635,8 +1685,10 @@ def cmd_project_new(args) -> tuple:
         seen.add(folder_name.casefold())
         folders.append(folder_name)
     base = pace / PROJECTS_DIR
-    if not base.is_dir():
-        return result("not-saved", f"Not saved: {PROJECTS_DIR}/ was not found in {pace}.", False)
+    if not base.is_dir() or (pace / "Projects").is_dir() and has_content(pace / "Projects"):
+        # A project kept in an old-named folder is not read, so a new one could take its id.
+        where = f"{PROJECTS_DIR}/ was not found in {pace}." if not base.is_dir() else "projects may still be kept under an old name."
+        return result("not-saved", f"Not saved: {where}{old_folder_names(pace)}", False)
     projects, issues, _ = scan_projects(pace)
     by_id = {}
     for entry in projects:

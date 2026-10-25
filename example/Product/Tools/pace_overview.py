@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Pace project overview: a dated page made from the records, in the Project overview add-in's template.
 
-Reads Record/ and Projects/ with the record tool's own readers, follows corrections and withdrawals
+Reads Record/ and 1 Projects/ with the record tool's own readers, follows corrections and withdrawals
 to each item's current account, and works out what is open, overdue or due soon and whose move it
-is. It changes no record. With --save it creates one new page in Views/, never replacing a file,
+is. It changes no record. With --save it creates one new page in 2 Views/, never replacing a file,
 and reads it back. Every command prints one JSON object: "status" is the honest outcome and
 "message" says it in plain words.
 
@@ -19,6 +19,7 @@ import importlib.util
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # keep Product/ free of cache files
@@ -29,10 +30,13 @@ pr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pr)
 
 TEMPLATE = Path("Product") / "Pace add-ins" / "Project overview" / "overview-template.html"
-VIEWS_DIR = "Views"
+VIEWS_DIR = "2 Views"
 PRODUCT_NAME = "Pace by SBR"
 SOON_DAYS = 7
 RECENT_DAYS = 21
+WEEK_DAYS = 7  # the "Last 7 days" line, today included
+AGE_DAYS = 14  # work with no due date shows how long it has been open from this many days
+FOLD_AFTER = 10  # a person owing more than this many items has their undated work folded by client
 OWNER_WORDS = {"owner", "the owner"}
 ESCAPES = (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#39;"))
 DOT = " &middot; "
@@ -54,6 +58,11 @@ def esc(text) -> str:
 
 def plain(text: str) -> str:
     return " ".join((text or "").split())
+
+
+def name_key(name: str) -> str:
+    """A person's name as one key: accents in one form, single spaces and no case, so one person is one person."""
+    return " ".join(unicodedata.normalize("NFC", name or "").split()).casefold()
 
 
 # ---------------------------------------------------------------- dates
@@ -118,7 +127,7 @@ class Folder:
         self.zone = zone or dt.datetime.now().astimezone().tzinfo
         self.now = moment.astimezone(self.zone)
         self.today = self.now.date()
-        self.owners = {name.casefold().strip() for name in owners if name.strip()} | OWNER_WORDS
+        self.owners = {name_key(name) for name in owners if name.strip()} | OWNER_WORDS
 
         projects, project_issues, self.unlabelled = pr.scan_projects(pace)
         self.projects = {entry["id"]: entry for entry in projects}
@@ -130,9 +139,13 @@ class Folder:
         except OSError as error:
             raise Stop(f"{pr.RECORD_DIR}/ could not be listed ({error}), so no overview was made.") from None
         self.names = names
-        self.items, self.problems, self.left_out = {}, [], 0
+        self.items, self.problems, self.notes, self.left_out = {}, [], [], 0
         for issue in project_issues + name_issues:
-            self.problems.append(issue["message"])
+            note = self._leftover_copy(record_dir, issue)
+            if note:
+                self.notes.append(note)  # nothing is missing, so the page is not partial
+            else:
+                self.problems.append(issue["message"])
         for stem, name in sorted(names.items()):
             item = pr.load(record_dir, name)
             if item["state"] in ("readable", "invalid"):
@@ -151,6 +164,28 @@ class Folder:
         self.files_in_record = len(names)  # second copies are named in problems, never opened as records
         self.chains = self._chains()
         self._facts = self._project_facts()  # read once, so every view names the same problems
+
+    @staticmethod
+    def _leftover_copy(record_dir: Path, issue: dict) -> str:
+        """A note when a save's temporary file is a leftover copy of a record that saved and reads the same, else "".
+
+        Such a file holds nothing the record does not, so it is housekeeping rather than something not read. A temporary
+        file with no saved record beside it, or one that differs, may be a save that did not finish, so it stays a problem."""
+        if issue.get("type") != "unfinished-save":
+            return ""
+        name = issue.get("file", "")
+        parts = name[len(pr.TEMP_PREFIX):].rsplit("-", 2)
+        if not name.startswith(pr.TEMP_PREFIX) or len(parts) != 3 or not pr.REQUEST.match(parts[0]):
+            return ""
+        saved = record_dir / f"{parts[0]}.md"
+        try:
+            same = saved.is_file() and saved.read_bytes() == (record_dir / name).read_bytes()
+        except OSError:
+            return ""
+        if not same:
+            return ""
+        return (f"{pr.RECORD_DIR}/{name} is a leftover copy of {pr.RECORD_DIR}/{parts[0]}.md from a save that finished; the "
+                f"record reads the same. {pr.TEMP_NOTE}")
 
     def made_after(self, stem: str, item: dict) -> bool:
         moment = pr.parse_time(pr.one(item["fields"], "created")) or pr.request_time(stem)
@@ -254,12 +289,6 @@ class Folder:
     def trail_html(self, pids) -> str:
         return TRAIL.join(esc(self.name_of(pid)) for pid in pids)
 
-    def label_html(self, pid: str) -> str:
-        above = list(reversed(self.ancestors(pid)))
-        if not above:
-            return esc(self.name_of(pid))
-        return f'<span class="parent">{self.trail_html(above)}{CHEVRON}</span> {esc(self.name_of(pid))}'
-
     def ref_label(self, pid: str) -> str:
         return self.trail_html(list(reversed(self.ancestors(pid))) + [pid])
 
@@ -327,7 +356,7 @@ class Folder:
     # Work
 
     def is_owner(self, name: str) -> bool:
-        return (name or "").casefold().strip() in self.owners
+        return name_key(name) in self.owners
 
     def entry(self, stem: str) -> dict:
         due = pr.parse_date(self.field(stem, "due"))
@@ -394,106 +423,250 @@ class Folder:
         soon = self.today + dt.timedelta(days=SOON_DAYS)
         return [item for item in items if item["due"] and item["due"] <= soon]
 
+    def age(self, item: dict) -> int | None:
+        """Whole days since the item was first recorded, or None when that day is not known or is after today."""
+        first = item.get("first") or item["request"]
+        day = self.day(first) if first in self.items else item["day"]
+        return (self.today - day).days if day and day <= self.today else None
+
+    def week(self, pids=None) -> dict:
+        """Actions in the last 7 days, today included: first recorded, done, cancelled, or with a different due date.
+
+        Each item's current account is compared with how it stood before the 7 days, its latest account saved before
+        them: it is done (or cancelled) in them when it is so now and was not then, and its due date changed when it
+        differs now from then. An item first recorded in them is new. Work recorded two ways is left out."""
+        wanted = (lambda pid: True) if pids is None else (lambda pid: pid in pids)
+        since = self.today - dt.timedelta(days=WEEK_DAYS - 1)
+        out = {"new": [], "done": [], "cancelled": [], "moved": []}
+        for chain in self.chains:
+            if len(chain["current"]) != 1:
+                continue
+            stem = chain["current"][0]
+            if not wanted(self.project_of(stem)) or self.field(stem, "kind") != "action":
+                continue
+            path, node = [stem], stem  # the accounts from the current one back, newest first
+            while True:
+                earlier = self.field(node, "corrects")
+                if not earlier or earlier not in self.items or earlier in path:
+                    break
+                path.append(earlier)
+                node = earlier
+            days = {account: self.day(account) for account in path}
+            if not any(day and since <= day <= self.today for day in days.values()):
+                continue  # nothing about it was saved in the 7 days
+            before = next((account for account in path if days[account] and days[account] < since), None)
+            item = self.entry(stem)
+            item["first"] = chain["first"]
+            first_day = self.day(chain["first"]) if chain["first"] in self.items else None
+            if first_day and since <= first_day <= self.today:
+                out["new"].append(item)
+            then = self.field(before, "state") if before else ""
+            if item["state"] in ("done", "cancelled"):
+                if then != item["state"]:
+                    out[item["state"]].append(item)
+                continue
+            if before and pr.parse_date(self.field(before, "due")) != item["due"]:
+                item["was"] = pr.parse_date(self.field(before, "due"))
+                out["moved"].append(item)
+        for key in out:
+            out[key].sort(key=self.order)
+        return out
+
 
 # ---------------------------------------------------------------- page parts
+#
+# Every list on the page is one line per item: when it is due (or how long it has waited), what it is, and where. Opening
+# a line shows the record's own words. Projects are rows that open: a project with projects inside it is open on the
+# page, so every project's row shows, and each row opens to its own work. Nothing here adds a judgement the records do
+# not hold; how late, how soon and how long are worked out from the dates.
 
-def tiles(counts: dict) -> list:
-    shown = (("overdue", "overdue"), ("due_today", "due today"), ("due_next_7_days", "due in the next 7 days"),
-             ("waiting_on_you", "waiting on you"), ("waiting_on_others", "waiting on others"), ("no_due_date", "with no due date"))
-    lines = ['<ul class="tiles">']
-    for key, words in shown:
-        kind = "tile key" if key == "overdue" and counts["overdue"] else "tile"
-        lines.append(f'<li class="{kind}"><span class="count">{counts[key]}</span> {words}</li>')
-    lines.append("</ul>")
+def plural(count: int, word: str, words: str = "") -> str:
+    return f"{count} {word if count == 1 else (words or word + 's')}"
+
+
+def short_day(day: dt.date, today: dt.date) -> str:
+    """A date for a narrow column: 4 Nov, with the year when it is not this year's."""
+    return f"{day.day} {day:%b}" + ("" if day.year == today.year else f" {day.year}")
+
+
+def someone_else(folder: Folder, name: str) -> bool:
+    return bool(name) and not folder.is_owner(name)
+
+
+def person(folder: Folder, name: str) -> str:
+    return "you" if folder.is_owner(name) else esc(name)
+
+
+def due_tag(folder: Folder, due: dt.date) -> str:
+    today = folder.today
+    if due < today:
+        return f'<span class="tag late">{how_soon(due, today)}</span>'
+    if due == today:
+        return '<span class="tag today">Today</span>'
+    if (due - today).days <= SOON_DAYS:
+        return f'<span class="tag soon">{how_soon(due, today).capitalize()}</span>'
+    return f'<span class="tag">{short_day(due, today)}</span>'
+
+
+def tag(folder: Folder, item: dict) -> str:
+    """The line's first column: done or cancelled, how late or soon it is due, or how long undated work has waited."""
+    if item["state"] in ("done", "cancelled"):
+        return f'<span class="tag">{item["state"].capitalize()}</span>'
+    if item["due"]:
+        return due_tag(folder, item["due"])
+    age = folder.age(item)
+    if age is not None and age >= AGE_DAYS:
+        word = "Waiting" if someone_else(folder, item["owed"]) else "Open"
+        return f'<span class="tag age">{word} {days_word(age)}</span>'
+    return '<span class="tag"></span>'
+
+
+def meta_text(folder: Folder, item: dict) -> str:
+    parts = [f"Owed by {person(folder, item['owed'])}" if item["owed"] else "No person named"]
+    if item["for"]:
+        parts.append(f"for {person(folder, item['for'])}")
+    parts.append(f"due {short_date(item['due'])}" if item["due"] else "no due date")
+    parts.append(esc(item["state"] or "state not recorded"))
+    return DOT.join(parts)
+
+
+def item_row(folder: Folder, item: dict, side: str = "", by: bool = True, jump: str = "") -> list:
+    """One open item as one line, its record's own words and who, when and its state inside.
+
+    `jump`, when given, is the id of its project's row; the link to it sits inside the opened line, never in the line
+    itself, which is already a control that opens and closes."""
+    owed = f'<span class="by">{DOT}{esc(item["owed"])}</span>' if by and someone_else(folder, item["owed"]) else ""
+    text = f'<p class="text">{esc(item["text"])}</p>' if item["text"] else ""
+    go = f'<p class="go"><a class="jump" href="#{jump}">Go to {side or "its row"}</a></p>' if jump else ""
+    return ['<li class="item"><details class="row">',
+            f'<summary>{tag(folder, item)}<span class="subj">{esc(item["subject"])}{owed}</span><span class="side">{side}</span></summary>',
+            f'<div class="more">{text}<p class="meta">{meta_text(folder, item)}</p>{go}</div>',
+            "</details></li>"]
+
+
+def record_row(label: str, item: dict, side: str, meta: str) -> list:
+    text = f'<p class="text">{esc(item["text"])}</p>' if item["text"] else ""
+    return ['<li class="item"><details class="row">',
+            f'<summary><span class="tag">{label}</span><span class="subj">{esc(item["subject"])}</span><span class="side">{side}</span></summary>',
+            f'<div class="more">{text}<p class="meta">{meta}</p></div>',
+            "</details></li>"]
+
+
+def rows(lines: list) -> list:
+    return ['<ul class="rows">'] + lines + ["</ul>"]
+
+
+def trail(folder: Folder, pid: str, below: str = "") -> str:
+    """A project's name after the projects above it, starting below `below` when that is one of them."""
+    chain = list(reversed(folder.ancestors(pid))) + [pid]
+    if below in chain:
+        chain = chain[chain.index(below) + 1:] or [pid]
+    return folder.trail_html(chain)
+
+
+def anchor(pid: str, own: bool = False) -> str:
+    """The id of a project's row on the page; a project id never holds two hyphens together, so these never clash."""
+    return f"p-{pid}--own" if own else f"p-{pid}"
+
+
+def by_owner(folder: Folder, items: list) -> list:
+    """Open items split into you, each other person by name (as first written), and no person named, each in order."""
+    groups: dict = {}
+    for item in items:
+        if folder.is_owner(item["owed"]):
+            key, heading = ("0", ""), "With you"
+        elif item["owed"]:
+            key, heading = ("1", name_key(item["owed"])), f"With {esc(plain(item['owed']))}"
+        else:
+            key, heading = ("2", ""), "No person named"
+        groups.setdefault(key, [heading, []])[1].append(item)
+    return [groups[key] for key in sorted(groups)]
+
+
+def work_lines(folder: Folder, items: list, side=lambda item: "") -> list:
+    """A project's own open work, under who owes it when that is anyone but the owner alone."""
+    groups = by_owner(folder, items)
+    if not groups:
+        return ['<p class="none">No open work recorded.</p>']
+    lines = []
+    for heading, chosen in groups:
+        if len(groups) > 1 or heading != "With you":
+            lines.append(f'<p class="group">{heading}</p>')
+        rows_ = []
+        for item in chosen:
+            rows_ += item_row(folder, item, side(item), by=False)
+        lines += rows(rows_)
     return lines
 
 
-def owed_text(folder: Folder, item: dict) -> str:
-    if not item["owed"]:
-        return "Owed by: not recorded"
-    return "Owed by you" if folder.is_owner(item["owed"]) else f"Owed by {esc(item['owed'])}"
-
-
-def for_text(folder: Folder, item: dict) -> str:
-    if not item["for"]:
-        return ""
-    return "For you" if folder.is_owner(item["for"]) else f"For {esc(item['for'])}"
-
-
-def item_lines(folder: Folder, item: dict, who: str, where: str = "") -> list:
-    """One open item: its project when the list mixes projects, the record's own words, then who, when and its state.
-
-    The page leaves out record references; the tool's result gives them for the items that need a reply."""
-    kind = "item"
-    parts = [who] if who else []
-    if item["due"]:
-        if item["due"] < folder.today:
-            kind = "item late"
-        elif item["due"] == folder.today:
-            kind = "item today"
-        parts += [f"due {short_date(item['due'])}", f'<span class="when">{how_soon(item["due"], folder.today)}</span>']
+def summary_lines(folder: Folder, counts: dict, projects: int) -> list:
+    """Three counts that say how urgent things are, then one line for the rest."""
+    lines = ['<div class="summary">']
+    for key, words in (("overdue", "overdue"), ("due_today", "due today"), ("due_next_7_days", f"due in the next {SOON_DAYS} days")):
+        number = counts[key]
+        kind = "stat" + (" hot" if key == "overdue" and number else "") + ("" if number else " zero")
+        lines.append(f'<p class="{kind}"><strong>{number}</strong> {words}</p>')
+    lines.append("</div>")
+    if counts["open"]:
+        who = f"{counts['waiting_on_you']} with you, {counts['waiting_on_others']} with others"
+        if counts["no_person_named"]:
+            who += f", {counts['no_person_named']} with no one named"
+        line = (f"{counts['open']} open in {plural(projects, 'project')}{DOT}{who}{DOT}"
+                f"{counts['no_due_date']} with no due date")
     else:
-        parts.append("no due date")
-    parts.append(esc(item["state"] or "state not recorded"))
-    return ([f'<li class="{kind}">'] + ([f'<p class="where">{where}</p>'] if where else [])
-            + [f'<p class="what"><strong>{esc(item["subject"])}</strong> {esc(item["text"])}</p>',
-               f'<p class="meta">{DOT.join(parts)}</p>', "</li>"])
+        line = "No open work recorded."
+    if counts["recorded_two_ways"]:
+        line += f"{DOT}{counts['recorded_two_ways']} recorded two ways"
+    return lines + [f'<p class="sub">{line}</p>']
 
 
-def record_lines(item: dict, meta: str) -> list:
-    return ['<li class="item">',
-            f'<p class="what"><strong>{esc(item["subject"])}</strong> {esc(item["text"])}</p>',
-            f'<p class="meta">{meta}</p>',
-            "</li>"]
+WEEK_PARTS = (("new", "new", "new", "New"), ("done", "done", "done", "Done"), ("cancelled", "cancelled", "cancelled", "Cancelled"),
+              ("moved", "due date changed", "due dates changed", "Due date changed"))
 
 
-def listed(lines: list) -> list:
-    return ['<ul class="items">'] + lines + ["</ul>"] if lines else ['<p class="none">None.</p>']
+def week_lines(folder: Folder, week: dict, below: str = "") -> list:
+    """What happened in the last 7 days, as one line that opens to the items."""
+    shown = [(key, one, many, heading) for key, one, many, heading in WEEK_PARTS if week[key]]
+    if not shown:
+        return [f'<p class="week">Last {WEEK_DAYS} days: nothing new, done, cancelled or with a changed due date.</p>']
+    said = DOT.join(f"<strong>{len(week[key])}</strong> {one if len(week[key]) == 1 else many}" for key, one, many, _ in shown)
+    lines = ['<details class="week">', f"<summary>Last {WEEK_DAYS} days: {said}</summary>", '<div class="body">']
+    for key, _, _, heading in shown:
+        found = []
+        for item in week[key]:
+            side = trail(folder, item["project"], below)
+            if key == "moved":
+                side += f"{DOT}was {short_day(item['was'], folder.today) if item['was'] else 'no date'}"
+            found += item_row(folder, item, side)
+        lines += [f'<p class="group">{heading}</p>'] + rows(found)
+    return lines + ["</div>", "</details>"]
 
 
-def two_ways_part(folder: Folder, groups: list) -> list:
+def two_ways_lines(folder: Folder, groups: list, below: str = "") -> list:
     if not groups:
         return []
-    lines = ['<section class="part two-ways">', "<h2>Recorded two ways</h2>",
-             '<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>', '<ul class="items">']
+    lines = ['<section class="part two-ways">', f'<h2>Recorded two ways <span class="n">{len(groups)}</span></h2>',
+             '<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>', '<ul class="rows">']
     for accounts in groups:
         first = accounts[0]
-        lines += ["<li>", f'<p><strong>{esc(first["subject"])}</strong> <span class="parent">{folder.ref_label(first["project"])}</span></p>',
+        lines += ['<li class="pair">', f'<p><strong>{esc(first["subject"])}</strong> <span class="side">{trail(folder, first["project"], below)}</span></p>',
                   '<ol class="accounts">']
         for item in accounts:
-            due = f"due {short_date(item['due'])}" if item["due"] else "no due date"
-            lines += ['<li class="item">', f'<p class="what">{esc(item["text"])}</p>',
-                      f'<p class="meta">{owed_text(folder, item)}{DOT}{due}{DOT}{esc(item["state"] or "state not recorded")}</p>',
-                      "</li>"]
+            lines += ['<li class="item">', f'<p class="text">{esc(item["text"])}</p>', f'<p class="meta">{meta_text(folder, item)}</p>', "</li>"]
         lines += ["</ol>", "</li>"]
     return lines + ["</ul>", "</section>"]
 
 
-def attention_part(folder: Folder, items: list, scope: str) -> list:
-    lines = []
-    for item in folder.needs_attention(items):
-        lines += item_lines(folder, item, owed_text(folder, item), folder.ref_label(item["project"]))
-    return (['<section class="part">', "<h2>Needs attention</h2>",
-             f'<p class="lede">Overdue, due today and due in the next {SOON_DAYS} days, {scope}.</p>']
-            + listed(lines) + ["</section>"])
-
-
-def groups_lines(folder: Folder, items: list, show_project) -> list:
-    """Open items split into Waiting on you, Waiting on others and No person named, each in the same order."""
-    groups = (("Waiting on you", lambda item: folder.is_owner(item["owed"])),
-              ("Waiting on others", lambda item: item["owed"] and not folder.is_owner(item["owed"])),
-              ("No person named", lambda item: not item["owed"]))
-    lines = []
-    for heading, belongs in groups:
-        chosen = [item for item in items if belongs(item)]
-        if not chosen:
-            continue
-        lines += [f'<h3 class="group">{heading}</h3>', '<ul class="items">']
-        for item in chosen:
-            lines += item_lines(folder, item, owed_text(folder, item) if item["owed"] else "",
-                                folder.ref_label(item["project"]) if show_project(item) else "")
-        lines.append("</ul>")
-    return lines or ['<p class="none">None.</p>']
+def attention_lines(folder: Folder, items: list, below: str = "", targets: dict | None = None) -> list:
+    """Overdue, due today and due in the next 7 days, each line naming its project, which jumps to its row when shown."""
+    chosen, found = folder.needs_attention(items), []
+    for item in chosen:
+        where = "" if below and item["project"] == below else trail(folder, item["project"], below)
+        found += item_row(folder, item, where, jump=(targets or {}).get(item["project"], ""))
+    lines = ['<section class="part">', f'<h2>Needs attention <span class="n">{len(chosen)}</span></h2>']
+    if chosen:
+        return lines + rows(found) + ["</section>"]
+    return lines + [f'<p class="none">Nothing is overdue or due in the next {SOON_DAYS} days.</p>', "</section>"]
 
 
 def pressing(folder: Folder, items: list, pid: str):
@@ -503,14 +676,15 @@ def pressing(folder: Folder, items: list, pid: str):
     return (-overdue, min(dated) if dated else dt.date.max, -len(mine), folder.name_of(pid).casefold())
 
 
-def project_order(folder: Folder, items: list, extra=()) -> tuple:
-    """The projects to list and their order, at any depth.
+def project_tree(folder: Folder, items: list, extra=()) -> tuple:
+    """The projects to show and how they nest, at any depth.
 
-    Listed: each project with open work, and each in `extra` (a target or status with no open work). They are
-    grouped under their top project, the most pressing group first. In a group each project comes before the
-    projects inside it, and projects side by side run most pressing first, judged by the most pressing work
-    anywhere inside them; ties go by name, then id. Projects whose parents loop are shown at the top rather
-    than lost. Returns the order and every project shown or above one shown."""
+    Shown: each project with open work, each in `extra` (a target or status with no open work), and every project
+    above one of them. Returns (tops, kids, tree, listed): the projects at the top, most pressing first; each shown
+    project's projects inside it, most pressing first; every project shown; and those with work, a target or a status.
+    Most pressing means the most overdue, then the earliest due date, then the most open work, judged by the work
+    anywhere inside a project; ties go by name, then id. Projects whose parents loop are shown at the top rather than
+    lost."""
     listed = set(item["project"] for item in items) | set(extra)
     tree = set(listed)
     for pid in sorted(listed):
@@ -545,21 +719,33 @@ def project_order(folder: Folder, items: list, extra=()) -> tuple:
     def side_by_side(pid):
         return (most_pressing(pid), folder.label(pid).casefold(), pid)
 
-    order: list = []
-    visited: set = set()
+    kids, seen = {}, set()
 
-    def visit(pid):
-        if pid in visited:
+    def place(pid):
+        if pid in seen:
             return
-        visited.add(pid)
-        if pid in listed:
-            order.append(pid)
-        for child in sorted(inside.get(pid, []), key=side_by_side):
-            visit(child)
+        seen.add(pid)
+        kids[pid] = [child for child in sorted(inside.get(pid, []), key=side_by_side) if child not in seen and child != pid]
+        for child in kids[pid]:
+            place(child)
+        kids[pid] = [child for child in kids[pid] if kids.get(child) is not None]
 
-    for pid in sorted(inside.get(top, []), key=side_by_side):
-        visit(pid)
-    return order, tree
+    tops = sorted(inside.get(top, []), key=side_by_side)
+    for pid in tops:
+        place(pid)
+    return tops, kids, tree, listed
+
+
+def inside_of(pid: str, kids: dict) -> list:
+    """The project and every shown project inside it, each before the projects inside it."""
+    out, stack = [], [pid]
+    while stack:
+        node = stack.pop()
+        if node in out:
+            continue
+        out.append(node)
+        stack.extend(reversed(kids.get(node, [])))
+    return out
 
 
 def fact_text(folder: Folder, key: str, fact) -> str:
@@ -581,47 +767,95 @@ def target_late(folder: Folder, fact) -> bool:
     return bool(day and day < folder.today)
 
 
-def projects_table(folder: Folder, items: list, ordered: list) -> list:
-    """One row per project: who leads it and its target when any project here has one; its open and overdue counts,
-    its earliest due date (late or not) and its newest record; and its status, with its date, under its name."""
-    facts = folder.facts()
-    columns = [key for key in ("owner", "target") if any(facts.get(pid, {}).get(key) for pid in ordered)]
-    rows = []
-    for pid in ordered:
-        mine = [item for item in items if item["project"] == pid]
-        found = facts.get(pid, {})
-        overdue = sum(1 for item in mine if item["due"] and item["due"] < folder.today)
-        dated = sorted(item["due"] for item in mine if item["due"])
-        if dated:
-            late = " late" if dated[0] < folder.today else ""
-            due = f'<td class="due{late}">{short_date(dated[0])}, {how_soon(dated[0], folder.today)}</td>'
-        else:
-            due = '<td class="due">No due date</td>'
-        status = (f'<span class="status"> {fact_text(folder, "status", found["status"])}</span>'
-                  if found.get("status") else "")
-        cells = ""
-        if "owner" in columns:
-            cells += f'<td class="owner">{fact_text(folder, "owner", found.get("owner"))}</td>'
-        if "target" in columns:
-            late = " late" if target_late(folder, found.get("target")) else ""
-            cells += f'<td class="target{late}">{fact_text(folder, "target", found.get("target"))}</td>'
-        last_text = day_and_age(folder.last_recorded({pid}), folder.today)
-        rows.append(f'<tr><th>{folder.label_html(pid)}{status}</th>{cells}<td class="num open">{len(mine)}</td>'
-                    f'<td class="num overdue{" late" if overdue else ""}">{overdue}</td>{due}<td class="last">{last_text}</td></tr>')
-    heads = "".join({"owner": "<th>Owner</th>", "target": "<th>Target</th>"}[key] for key in columns)
-    return (['<div class="table-wrap">', '<table class="projects">', "<thead>",
-             f'<tr><th>Project</th>{heads}<th class="num">Open</th><th class="num">Overdue</th><th>Earliest due</th>'
-             "<th>Last recorded</th></tr>",
-             "</thead>", "<tbody>"] + rows + ["</tbody>", "</table>", "</div>"])
+def last_text(folder: Folder, pids) -> str:
+    day = folder.last_recorded(set(pids))
+    if day is None:
+        return "Not recorded"
+    return short_day(day, folder.today) if day > folder.today else how_long_ago(day, folder.today).capitalize()
 
 
-def every_project_view(folder: Folder) -> tuple:
+def lead_text(folder: Folder, mine: list, pid: str) -> str:
+    """The row's second line: its most pressing open item, where it is and who owes it when not the owner."""
+    if not mine:
+        return "No open work recorded"
+    first = mine[0]
+    parts = [esc(first["subject"])]
+    if first["project"] != pid:
+        parts.append(trail(folder, first["project"], pid))
+    if someone_else(folder, first["owed"]):
+        parts.append(esc(first["owed"]))
+    if not first["due"]:
+        age = folder.age(first)
+        if age is not None and age >= AGE_DAYS:
+            parts.append(f"open {days_word(age)}")
+    return ("Next: " if first["due"] else "Oldest open: ") + DOT.join(parts)
+
+
+def node_summary(folder: Folder, pid: str, label: str, mine: list, pids: list, own: bool = False) -> str:
+    """A row's line: the project, its status, owner and target, what is next, its open count, next due date and last record.
+    The row of a project's own work (`own`) leaves out the project's facts, which its parent row gives."""
+    facts = {} if own else folder.facts().get(pid, {})
+    bits = [f'<span class="pname">{label}</span>']
+    if facts.get("status"):
+        bits.append(f'<span class="status">{fact_text(folder, "status", facts["status"])}</span>')
+    known = []
+    if facts.get("owner"):
+        known.append(f"Owner {fact_text(folder, 'owner', facts['owner'])}")
+    if facts.get("target"):
+        late = ' class="late"' if target_late(folder, facts["target"]) else ""
+        known.append(f"Target <span{late}>{fact_text(folder, 'target', facts['target'])}</span>")
+    if known:
+        bits.append(f'<span class="fact">{DOT.join(known)}</span>')
+    bits.append(f'<span class="next">{lead_text(folder, mine, pid)}</span>')
+    dated = [item["due"] for item in mine if item["due"]]
+    due = due_tag(folder, min(dated)) if dated else f'<span class="tag empty">{"No date" if mine else "None"}</span>'
+    return (f'<summary><span class="label">{"".join(bits)}</span><span class="num">{len(mine)}</span>'
+            f'<span class="due">{due}</span><span class="last">{last_text(folder, pids)}</span></summary>')
+
+
+def node_lines(folder: Folder, pid: str, items: list, kids: dict) -> list:
+    """A project as a row that opens. One with projects inside it is open, so their rows show; its own work is a row of
+    its own, named after it; every other row opens to its own work."""
+    children = kids.get(pid, [])
+    pids = inside_of(pid, kids)
+    mine = sorted((item for item in items if item["project"] in pids), key=folder.order)
+    own = [item for item in mine if item["project"] == pid]
+    ident = f' id="{anchor(pid)}"' if pr.PROJECT_ID.match(pid) else ""
+    if not children:
+        return ([f'<details class="node"{ident}>', node_summary(folder, pid, esc(folder.name_of(pid)), mine, folder.family(pid)),
+                 '<div class="body">'] + work_lines(folder, own) + ["</div>", "</details>"])
+    lines = [f'<details class="node parent"{ident} open>', node_summary(folder, pid, esc(folder.name_of(pid)), mine, folder.family(pid)),
+             '<div class="body">']
+    if own:
+        own_ident = f' id="{anchor(pid, own=True)}"' if pr.PROJECT_ID.match(pid) else ""
+        name = f'{esc(folder.name_of(pid))} <span class="itself">itself</span>'
+        lines += ([f'<details class="node own"{own_ident}>', node_summary(folder, pid, name, own, [pid], own=True), '<div class="body">']
+                  + work_lines(folder, own) + ["</div>", "</details>"])
+    for child in children:
+        lines += node_lines(folder, child, items, kids)
+    return lines + ["</div>", "</details>"]
+
+
+def jump_targets(items: list, kids: dict, shown) -> dict:
+    """Where a Needs attention line jumps: its project's row, or the row of the project's own work when it has projects inside."""
+    targets = {}
+    for pid in set(item["project"] for item in items) & set(shown):
+        if pr.PROJECT_ID.match(pid):
+            targets[pid] = anchor(pid, own=bool(kids.get(pid)))
+    return targets
+
+
+HEADS = ('<div class="heads"><span></span><span>{first}</span><span class="num">{count}</span><span>Next due</span>'
+         '<span>{last}</span></div>')
+
+
+def every_project_view(folder: Folder) -> dict:
     work = folder.work()
     items, counts = work["open"], folder.counts(work["open"], work["two_ways"])
     tracked = [pid for pid, found in folder.facts().items() if found.get("target") or found.get("status")]
-    ordered, tree = project_order(folder, items, tracked)
-    # A project above one in the table is in the table's tree, and work recorded two ways is in that section, so
-    # none of them, nor the projects above work recorded two ways, is listed as having no open work.
+    tops, kids, tree, listed = project_tree(folder, items, tracked)
+    # A project above one shown is shown, and work recorded two ways is in that section, so none of them, nor the
+    # projects above work recorded two ways, is listed as having no open work.
     disputed = set()
     for accounts in work["two_ways"]:
         if any(item["kind"] == "action" for item in accounts):
@@ -630,14 +864,17 @@ def every_project_view(folder: Folder) -> tuple:
     idle = sorted((pid for pid in folder.projects if pid not in tree and pid not in disputed),
                   key=lambda pid: folder.label(pid).casefold())
 
-    lines = ["<!-- start: every project view -->", '<section class="view">'] + tiles(counts)
-    lines += two_ways_part(folder, work["two_ways"])
-    lines += attention_part(folder, items, "across every project")
-    lines += ['<section class="part">', "<h2>Projects</h2>",
-              '<p class="lede">Each project with open work, a target or a status, grouped under its parent, the most pressing '
-              "first.</p>"]
-    if ordered:
-        lines += projects_table(folder, items, ordered)
+    lines = ["<!-- start: every project view -->", '<section class="view">']
+    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
+    week = folder.week()
+    lines += week_lines(folder, week)
+    lines += two_ways_lines(folder, work["two_ways"])
+    lines += attention_lines(folder, items, targets=jump_targets(items, kids, tree))
+    lines += ['<section class="part">', f'<h2>Projects <span class="n">{len(listed)} with open work, a target or a status</span></h2>']
+    if tops:
+        lines.append(HEADS.format(first="Project and what is next", count="Open", last="Last activity"))
+        for pid in tops:
+            lines += node_lines(folder, pid, items, kids)
     else:
         lines.append('<p class="none">No project has open work recorded.</p>')
     if idle:
@@ -645,77 +882,96 @@ def every_project_view(folder: Folder) -> tuple:
     if folder.unlabelled:
         lines.append(f'<p class="quiet">Folders with no Pace project.md: {esc(", ".join(folder.unlabelled))}. '
                      "Ask the owner what each one is.</p>")
-    lines.append("</section>")
-    if items:
-        lines += ['<section class="part">', "<h2>Open work by project</h2>"]
-        for pid in [pid for pid in ordered if any(item["project"] == pid for item in items)]:
-            mine = [item for item in items if item["project"] == pid]
-            overdue = sum(1 for item in mine if item["due"] and item["due"] < folder.today)
-            purpose = plain((folder.projects.get(pid) or {}).get("purpose", "")) or "Purpose not recorded"
-            lines += ['<details class="project" open>',
-                      f'<summary>{folder.label_html(pid)} <span class="counts">{len(mine)} open{DOT}{overdue} overdue</span></summary>',
-                      f'<p class="purpose">{esc(purpose)}</p>']
-            lines += groups_lines(folder, mine, lambda item: False)
-            lines.append("</details>")
-        lines.append("</section>")
-    lines += ["</section>", "<!-- end: every project view -->"]
-    return lines, work, counts, "Project overview", ""
+    lines += ["</section>", "</section>", "<!-- end: every project view -->"]
+    return {"head": [], "lines": lines, "work": work, "counts": counts, "week": week, "heading": "All projects",
+            "title": "Project overview", "suffix": ""}
 
 
-def one_project_view(folder: Folder, pid: str) -> tuple:
+def one_project_view(folder: Folder, pid: str) -> dict:
     if pid not in folder.projects:
-        raise Stop(f"No project with id {pid!r} is in {pr.PROJECTS_DIR}/. List them with the record tool's projects command.")
+        raise Stop(f"No project with id {pid!r} is in {pr.PROJECTS_DIR}/. List them with the record tool's projects command."
+                   f"{pr.old_folder_names(folder.pace)}")
     family = folder.family(pid)
     work = folder.work(set(family))
     items, counts = work["open"], folder.counts(work["open"], work["two_ways"])
     entry = folder.projects[pid]
     above = list(reversed(folder.ancestors(pid)))
-    inside = [folder.trail_html(list(reversed(folder.ancestors(child)))[len(above) + 1:] + [child]) for child in family[1:]]
-    last = folder.last_recorded(set(family))
-    facts = folder.facts()
-    found = facts.get(pid, {})
-    lines = ["<!-- start: one project view -->", '<section class="view">', '<dl class="facts">',
-             "<dt>Purpose</dt>", f"<dd>{esc(plain(entry.get('purpose', '')) or 'Purpose not recorded')}</dd>",
-             "<dt>Owner</dt>", f"<dd>{fact_text(folder, 'owner', found.get('owner'))}</dd>",
-             "<dt>Target</dt>", f"<dd>{fact_text(folder, 'target', found.get('target'))}</dd>",
-             "<dt>Status</dt>", f"<dd>{fact_text(folder, 'status', found.get('status'))}</dd>",
-             "<dt>Part of</dt>", f"<dd>{folder.trail_html(above) if above else 'Not part of another project'}</dd>",
-             "<dt>Projects inside it</dt>", f"<dd>{', '.join(inside) if inside else 'None'}</dd>",
-             "<dt>Last recorded</dt>", f"<dd>{day_and_age(last, folder.today)}</dd>",
-             "</dl>"] + tiles(counts)
-    lines += two_ways_part(folder, work["two_ways"])
-    lines += attention_part(folder, items, "in this project and the projects inside it")
-    # The table shows when a project inside this one has open work, a target or a status.
-    tracked = [child for child in family if facts.get(child, {}).get("target") or facts.get(child, {}).get("status")]
-    if any(item["project"] != pid for item in items) or [child for child in tracked if child != pid]:
-        ordered, _ = project_order(folder, items, tracked)
-        lines += ['<section class="part">', "<h2>Projects</h2>",
-                  '<p class="lede">This project and the projects inside it that have open work, a target or a status, '
-                  "the most pressing first.</p>"]
-        lines += projects_table(folder, items, ordered) + ["</section>"]
-    lines += ['<section class="part">', "<h2>Open work</h2>"]
-    lines += groups_lines(folder, items, lambda item: item["project"] != pid)
-    lines.append("</section>")
+    found = folder.facts().get(pid, {})
+    facts = []
+    if above:
+        facts.append(f"Part of <strong>{folder.trail_html(above)}</strong>")
+    for key, word in (("owner", "Owner"), ("target", "Target"), ("status", "Status")):
+        if found.get(key):
+            late = ' class="late"' if key == "target" and target_late(folder, found[key]) else ""
+            facts.append(f"{word} <strong{late}>{fact_text(folder, key, found[key])}</strong>")
+    facts.append(f"Last recorded <strong>{day_and_age(folder.last_recorded(set(family)), folder.today)}</strong>")
+    head = [f'<p class="lead">{esc(plain(entry.get("purpose", "")) or "Purpose not recorded")}</p>',
+            '<p class="known">' + "".join(f"<span>{fact}</span>" for fact in facts) + "</p>"]
 
-    def recent(heading, key, meta):
-        chosen = []
-        for item in work[key]:
-            chosen += record_lines(item, meta(item))
-        return ['<section class="part">', f"<h2>{heading}</h2>"] + listed(chosen) + ["</section>"]
-
-    def when(item):
-        return short_date(item["day"]) if item["day"] else "Date not recorded"
+    # The rows show when a project inside this one has open work, a target or a status.
+    tracked = [child for child in family if folder.facts().get(child, {}).get("target") or folder.facts().get(child, {}).get("status")]
+    _, kids, tree, listed = project_tree(folder, items, tracked)
+    shown = set(inside_of(pid, kids)) if pid in tree else {pid}
+    disputed = set()
+    for accounts in work["two_ways"]:
+        if any(item["kind"] == "action" for item in accounts):
+            for item in accounts:
+                disputed |= {item["project"], *folder.ancestors(item["project"])}
+    lines = ["<!-- start: one project view -->", '<section class="view">']
+    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
+    week = folder.week(set(family))
+    lines += week_lines(folder, week, pid)
+    lines += two_ways_lines(folder, work["two_ways"], pid)
+    if kids.get(pid):
+        targets = jump_targets(items, kids, shown)
+        lines += attention_lines(folder, items, pid, targets)
+        idle = [child for child in family[1:] if child not in shown and child not in disputed]
+        inside = len((set(listed) & set(family)) - {pid})
+        lines += ['<section class="part">', f'<h2>Projects <span class="n">{inside} inside with open work, a target or a status</span></h2>',
+                  HEADS.format(first="Project and what is next", count="Open", last="Last activity")]
+        own = sorted((item for item in items if item["project"] == pid), key=folder.order)
+        if own:
+            name = f'{esc(folder.name_of(pid))} <span class="itself">itself</span>'
+            lines += ([f'<details class="node own" id="{anchor(pid, own=True)}">', node_summary(folder, pid, name, own, [pid], own=True),
+                       '<div class="body">'] + work_lines(folder, own) + ["</div>", "</details>"])
+        for child in kids[pid]:
+            lines += node_lines(folder, child, items, kids)
+        if idle:
+            lines.append(f'<p class="quiet">No open work recorded: {", ".join(trail(folder, child, pid) for child in idle)}.</p>')
+        lines.append("</section>")
+    else:
+        lines += attention_lines(folder, items, pid)
+        idle = [child for child in family[1:] if child not in disputed]
+        lines += ['<section class="part">', f'<h2>Open work <span class="n">{len(items)}</span></h2>']
+        lines += work_lines(folder, items, lambda item: trail(folder, item["project"], pid) if item["project"] != pid else "")
+        if idle:
+            lines.append(f'<p class="quiet">No open work recorded: {", ".join(trail(folder, child, pid) for child in idle)}.</p>')
+        lines.append("</section>")
 
     def source(item):
         if item["from"] == "owner":
             return "From you"
         return f"From {esc(item['who'])}" if item["who"] else f"From: {esc(item['from'] or 'not recorded')}"
 
-    lines += recent("Decided in the last three weeks", "decisions", lambda item: f"{when(item)}{DOT}{source(item)}")
-    lines += recent("Changed in the last three weeks", "changes", lambda item: f"{when(item)}{DOT}{source(item)}")
-    lines += recent("Done in the last three weeks", "done", lambda item: f"{when(item)}{DOT}{esc(item['state'])}")
-    lines += recent("Cancelled in the last three weeks", "cancelled", lambda item: f"{when(item)}{DOT}{esc(item['state'])}")
-    lines += recent("Notes from the last three weeks", "notes", when)
+    recent = []
+    for key, label in (("decisions", "Decided"), ("changes", "Changed"), ("done", "Done"), ("cancelled", "Cancelled"),
+                       ("notes", "Note")):
+        recent += [(item["request"], label, item) for item in work[key]]
+    if recent:
+        lines += ['<section class="part">', f'<h2>Last three weeks <span class="n">{len(recent)}</span></h2>']
+        found_rows = []
+        for _, label, item in sorted(recent, key=lambda entry: entry[0], reverse=True):
+            when = short_date(item["day"]) if item["day"] else "Date not recorded"
+            side = (trail(folder, item["project"], pid) + DOT if item["project"] != pid else "") + (
+                short_day(item["day"], folder.today) if item["day"] else "")
+            if label in ("Decided", "Changed"):
+                meta = when + DOT + source(item)
+            elif label in ("Done", "Cancelled"):
+                meta = when + DOT + esc(item["state"])
+            else:
+                meta = when
+            found_rows += record_row(label, item, side, meta)
+        lines += rows(found_rows) + ["</section>"]
     places = []
     documents = folder.pace / entry["folder"] / pr.WORKING_DIR
     try:
@@ -737,43 +993,98 @@ def one_project_view(folder: Folder, pid: str) -> tuple:
                 continue
             if re.search(rf"^{role} project id:\s*{re.escape(pid)}\s*$", text, re.M):
                 places.append(pr.rel(folder.pace, path))
-    lines += ['<section class="part">', "<h2>Documents and repository references</h2>"]
-    lines += (['<ul class="files">'] + [f"<li>{esc(place)}</li>" for place in places] + ["</ul>"]) if places else ['<p class="none">None.</p>']
+    lines += ['<section class="part refs">']
+    if places:
+        lines += ['<details class="files">', f'<summary>Documents and repository references <span class="n">{len(places)}</span></summary>',
+                  '<ul class="files">'] + [f"<li>{esc(place)}</li>" for place in places] + ["</ul>", "</details>"]
+    else:
+        lines.append('<p class="quiet">Documents and repository references: none.</p>')
     lines += ["</section>", "</section>", "<!-- end: one project view -->"]
-    return lines, work, counts, folder.name_of(pid), f"-{pid}"
+    return {"head": head, "lines": lines, "work": work, "counts": counts, "week": week, "heading": folder.name_of(pid),
+            "title": folder.name_of(pid), "suffix": f"-{pid}"}
 
 
-def by_person_view(folder: Folder) -> tuple:
+def by_person_view(folder: Folder) -> dict:
     work = folder.work()
     items, counts = work["open"], folder.counts(work["open"], work["two_ways"])
     people: dict = {}
     for item in items:
         for role, name in (("owes", item["owed"]), ("waits", item["for"])):
             if name:
-                key = "you" if folder.is_owner(name) else name.casefold().strip()
+                key = "you" if folder.is_owner(name) else name_key(name)
                 people.setdefault(key, {"name": "You" if key == "you" else name.strip(), "owes": [], "waits": []})[role].append(item)
     order = sorted(people, key=lambda key: (key != "you", people[key]["name"].casefold()))
-    lines = ["<!-- start: by person view -->", '<section class="view">'] + two_ways_part(folder, work["two_ways"])
-    lines.append('<div class="cards">')
+    anyone_waits = any(people[key]["waits"] for key in order)
+
+    def for_side(item, below=""):
+        where = trail(folder, item["project"], below) if item["project"] != below else ""
+        if item["for"]:
+            where += (DOT if where else "") + f"for {person(folder, item['for'])}"
+        return where
+
+    lines = ["<!-- start: by person view -->", '<section class="view">']
+    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
+    week = folder.week()
+    lines += week_lines(folder, week)
+    lines += two_ways_lines(folder, work["two_ways"])
+    lines += attention_lines(folder, items)
+    lines += ['<section class="part">', f'<h2>People <span class="n">{len(order)}</span></h2>']
+    if order:
+        lines.append(HEADS.format(first="Person and what is next", count="Owes", last="Waiting for" if anyone_waits else ""))
     for key in order:
-        person = people[key]
-        owes, waits = [], []
-        for item in person["owes"]:
-            owes += item_lines(folder, item, for_text(folder, item), folder.ref_label(item["project"]))
-        for item in person["waits"]:
-            waits += item_lines(folder, item, owed_text(folder, item), folder.ref_label(item["project"]))
-        lines += ['<article class="card">', f"<h2>{esc(person['name'])}</h2>", '<h3 class="group">Owes</h3>'] + listed(owes)
-        lines += ['<h3 class="group">Waiting for</h3>'] + listed(waits) + ["</article>"]
-    nobody = []
-    for item in items:
-        if not item["owed"]:
-            nobody += item_lines(folder, item, "", folder.ref_label(item["project"]))
+        found = people[key]
+        owes = sorted(found["owes"], key=folder.order)
+        waits = sorted(found["waits"], key=folder.order)
+        dated = [item["due"] for item in owes if item["due"]]
+        if owes:
+            first = owes[0]
+            parts = [esc(first["subject"]), trail(folder, first["project"])]
+            lead = ("Next: " if first["due"] else "Oldest open: ") + DOT.join(parts)
+        else:
+            lead = "Owes nothing recorded"
+        due = due_tag(folder, min(dated)) if dated else f'<span class="tag empty">{"No date" if owes else "None"}</span>'
+        lines += [f'<details class="node person"{" open" if key == "you" else ""}>',
+                  f'<summary><span class="label"><span class="pname">{esc(found["name"])}</span><span class="next">{lead}</span></span>'
+                  f'<span class="num">{len(owes)}</span><span class="due">{due}</span><span class="last">{len(waits) or ""}</span></summary>',
+                  '<div class="body">']
+        owes_word = "You owe" if key == "you" else "Owes"
+        with_dates = [item for item in owes if item["due"]]
+        undated = [item for item in owes if not item["due"]]
+        if with_dates:
+            lines.append(f'<p class="group">{owes_word}, with a due date</p>')
+            lines += rows([line for item in with_dates for line in item_row(folder, item, for_side(item), by=False)])
+        if undated and len(owes) > FOLD_AFTER:
+            # A long list folds its undated work by the project at the top of each item's folders.
+            tops: dict = {}
+            for item in undated:
+                top = (list(reversed(folder.ancestors(item["project"]))) or [item["project"]])[0]
+                tops.setdefault(top, []).append(item)
+            for top, chosen in tops.items():
+                lines += ['<details class="fold">', f'<summary>{owes_word}, with no due date: {esc(folder.name_of(top))} '
+                          f'<span class="n">{len(chosen)}</span></summary>']
+                lines += rows([line for item in chosen for line in item_row(folder, item, for_side(item, top), by=False)])
+                lines.append("</details>")
+        elif undated:
+            lines.append(f'<p class="group">{owes_word}, with no due date</p>')
+            lines += rows([line for item in undated for line in item_row(folder, item, for_side(item), by=False)])
+        if waits:
+            lines.append(f'<p class="group">{"You are waiting for" if key == "you" else "Waiting for"}</p>')
+            lines += rows([line for item in waits for line in item_row(
+                folder, item, trail(folder, item["project"]) + DOT + (f"from {person(folder, item['owed'])}" if item["owed"] else "no one named"),
+                by=False)])
+        lines += ["</div>", "</details>"]
+    nobody = sorted((item for item in items if not item["owed"]), key=folder.order)
     if nobody:
-        lines += ['<article class="card">', "<h2>No person named</h2>"] + listed(nobody) + ["</article>"]
+        lines += ['<details class="node person">',
+                  '<summary><span class="label"><span class="pname">No person named</span><span class="next">Open work that names no one who owes it</span></span>'
+                  f'<span class="num">{len(nobody)}</span><span class="due"></span><span class="last"></span></summary>', '<div class="body">']
+        lines += rows([line for item in nobody for line in item_row(folder, item, trail(folder, item["project"]))])
+        lines += ["</div>", "</details>"]
     if not order and not nobody:
-        lines.append('<p class="none">No open work is recorded.</p>')
-    lines += ["</div>", "</section>", "<!-- end: by person view -->"]
-    return lines, work, counts, "Work by person", "-by-person"
+        lines.append('<p class="none">No open work recorded.</p>')
+    lines += ["</section>", "</section>", "<!-- end: by person view -->"]
+    return {"head": [], "lines": lines, "work": work, "counts": counts, "week": week, "heading": "By person",
+            "title": "Project overview by person", "suffix": "-by-person"}
 
 
 # ---------------------------------------------------------------- the page
@@ -789,24 +1100,36 @@ def template_parts(text: str) -> dict:
     return parts
 
 
-def build_page(folder: Folder, parts: dict, view_lines: list, heading: str, title: str, asked: str,
-               searched: str, could_not_read: str) -> str:
+# The styles a page of this design needs; a customised template whose style block has none of them predates it.
+CURRENT_STYLES = (".node", ".row", ".tag", ".summary")
+
+
+def build_page(folder: Folder, parts: dict, view: dict, title: str, asked: str, searched: str, could_not_read: str) -> str:
+    """The page: the header with the as-at moment, the view, then what was asked and searched, then the template's footer."""
     lines = ["<!DOCTYPE html>", '<html lang="en-NZ">', "<head>", '<meta charset="utf-8">',
              '<meta name="viewport" content="width=device-width, initial-scale=1">',
              '<meta name="color-scheme" content="light dark">', f"<title>{esc(title)} - {PRODUCT_NAME}</title>",
              parts["style"], "</head>", "<body>", '<main class="page">', "", "<header>", '<div class="brand">',
-             f'<p class="product">{PRODUCT_NAME}</p>', parts["wordmark"], "</div>", f"<h1>{esc(heading)}</h1>",
-             '<dl class="facts">', "<dt>As at</dt>", f"<dd>{esc(long_moment(folder.now))}</dd>",
-             "<dt>Asked</dt>", f"<dd>{esc(asked)}</dd>", "<dt>Searched</dt>", f"<dd>{esc(searched)}</dd>",
-             "<dt>Could not read</dt>", f"<dd>{esc(could_not_read)}</dd>", "</dl>", "</header>", ""]
-    lines += view_lines + ["", parts["footer"], "", "</main>", "</body>", "</html>", ""]
+             f'<p class="product">{PRODUCT_NAME}</p>', parts["wordmark"], "</div>", '<div class="title">',
+             f"<h1>{esc(view['heading'])}</h1>", f'<p class="asat">As at {esc(long_moment(folder.now))}</p>', "</div>"]
+    lines += view["head"]
+    if folder.problems:
+        lines.append('<p class="partial">Partial: some files could not be read. They are named under Could not read at the '
+                     "end of this page.</p>")
+    lines += ["</header>", ""] + view["lines"] + ["", '<section class="about">', '<dl class="facts">',
+              "<dt>Asked</dt>", f"<dd>{esc(asked)}</dd>", "<dt>Searched</dt>", f"<dd>{esc(searched)}</dd>",
+              "<dt>Could not read</dt>", f"<dd>{esc(could_not_read)}</dd>"]
+    if folder.notes:
+        lines += ["<dt>Housekeeping</dt>", f"<dd>{esc(' '.join(folder.notes))}</dd>"]
+    lines += ["</dl>", "</section>", "", parts["footer"], "", "</main>", "</body>", "</html>", ""]
     return "\n".join(lines)
 
 
 def save_page(folder: Folder, name: str, page: str) -> tuple:
     views = folder.pace / VIEWS_DIR
     if not views.is_dir():
-        return "not-saved", None, f"{VIEWS_DIR}/ was not found in {folder.pace}, so the page was not saved."
+        return "not-saved", None, (f"{VIEWS_DIR}/ was not found in {folder.pace}, so the page was not saved."
+                                   f"{pr.old_folder_names(folder.pace)}")
     data = page.encode("utf-8")
     for number in range(1, 100):
         path = views / (f"{name}.html" if number == 1 else f"{name}-{number}.html")
@@ -839,19 +1162,37 @@ def _run(args) -> tuple:
         parts = template_parts(template.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as error:
         raise Stop(f"The page template could not be read ({error}). No page was made.") from None
+    style_note = ""
+    if not all(name in parts["style"] for name in CURRENT_STYLES):
+        # A customised template from before this page design: its styles would leave the page unstyled, so the
+        # shipped styles are used, and the result says so.
+        shipped = HERE.parent / "Pace add-ins" / "Project overview" / "overview-template.html"
+        try:
+            current = template_parts(shipped.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, Stop):
+            current = None
+        if current and all(name in current["style"] for name in CURRENT_STYLES):
+            parts["style"] = current["style"]
+            style_note = (" The template's style block was made for an earlier page design, so the shipped template's "
+                          "styles were used; compare the customised copy with the shipped template and carry over its styles.")
+        else:
+            style_note = (" The template's style block was made for an earlier page design and the shipped template's "
+                          "styles could not be read, so the page may look unstyled; compare the customised copy with the "
+                          "shipped template and carry over its styles.")
 
     if args.project:
-        view = "one project"
-        view_lines, work, counts, heading, suffix = one_project_view(folder, args.project)
+        kind = "one project"
+        view = one_project_view(folder, args.project)
         default_asked = f"Where does {folder.name_of(args.project)} stand? It and the projects inside it."
     elif args.by_person:
-        view = "by person"
-        view_lines, work, counts, heading, suffix = by_person_view(folder)
-        default_asked = "What does each person owe, and what are they waiting for? Every project in Projects/."
+        kind = "by person"
+        view = by_person_view(folder)
+        default_asked = "What does each person owe, and what are they waiting for? Every project in 1 Projects/."
     else:
-        view = "every project"
-        view_lines, work, counts, heading, suffix = every_project_view(folder)
-        default_asked = "Where does every project stand? Every project in Projects/."
+        kind = "every project"
+        view = every_project_view(folder)
+        default_asked = "Where does every project stand? Every project in 1 Projects/."
+    work, counts, suffix = view["work"], view["counts"], view["suffix"]
 
     files, projects = folder.files_in_record, len(folder.projects)
     records = (f"All {files} record files in {pr.RECORD_DIR}/, each opened" if files > 1 else
@@ -863,8 +1204,8 @@ def _run(args) -> tuple:
                 f"{'the one project' if projects == 1 else f'the {projects} projects'} in {pr.PROJECTS_DIR}/. "
                 "This computer's copy only; no cloud copy was checked.")
     could_not_read = ("Partial: " + " ".join(folder.problems)) if folder.problems else "Nothing: every file listed was opened."
-    title = f"{heading}, {short_date(folder.today)}"
-    page = build_page(folder, parts, view_lines, heading, title, args.asked or default_asked, searched, could_not_read)
+    title = f"{view['title']}, {short_date(folder.today)}"
+    page = build_page(folder, parts, view, title, args.asked or default_asked, searched, could_not_read)
 
     attention = [{"project": folder.label(item["project"]), "subject": item["subject"], "owed_by": item["owed"] or None,
                   "due": item["due"].isoformat(), "when": how_soon(item["due"], folder.today), "request": item["request"]}
@@ -874,18 +1215,21 @@ def _run(args) -> tuple:
     zone_note = (f"Dates are compared in {folder.zone_name} time, from Pace.md." if folder.zone_name else
                  f"Pace.md names no time zone, so today is this computer's date ({folder.now.tzname()}) and each record "
                  "keeps the date it was written with.")
-    summary = {"view": view, "as_at": long_moment(folder.now), "counts": counts, "needs_attention": attention,
-               "recorded_two_ways": two_ways, "searched": searched, "could_not_read": could_not_read,
-               "complete": not folder.problems, "time_zone": folder.zone_name, "folders_without_id": folder.unlabelled}
+    week = {"new": len(view["week"]["new"]), "done": len(view["week"]["done"]), "cancelled": len(view["week"]["cancelled"]),
+            "due_date_changed": len(view["week"]["moved"])}
+    summary = {"view": kind, "as_at": long_moment(folder.now), "counts": counts, "last_7_days": week,
+               "needs_attention": attention, "recorded_two_ways": two_ways, "searched": searched,
+               "could_not_read": could_not_read, "complete": not folder.problems, "housekeeping": folder.notes,
+               "time_zone": folder.zone_name, "folders_without_id": folder.unlabelled}
     glance = (f"{counts['open']} open: {counts['overdue']} overdue, {counts['due_today']} due today, "
               f"{counts['due_next_7_days']} due in the next {SOON_DAYS} days, {counts['waiting_on_you']} waiting on you, "
               f"{counts['waiting_on_others']} waiting on others and {counts['recorded_two_ways']} recorded two ways.")
     if not args.save:
-        return pr.result("made", f"Overview made, not saved (no --save). As at {summary['as_at']}. {glance} {zone_note}",
+        return pr.result("made", f"Overview made, not saved (no --save). As at {summary['as_at']}. {glance} {zone_note}{style_note}",
                          True, page=None, **summary)
     name = f"{folder.today.isoformat()}-project-overview{suffix}"
     status, path, said = save_page(folder, name, page)
-    return pr.result(status, f"{said} As at {summary['as_at']}. {glance} {zone_note}", status == "saved",
+    return pr.result(status, f"{said} As at {summary['as_at']}. {glance} {zone_note}{style_note}", status == "saved",
                      page=pr.rel(pace, path) if path else None, **summary)
 
 
@@ -897,6 +1241,12 @@ def run(args) -> tuple:
         return {"status": "not-made", "message": str(error)}, 1
     except OSError as error:
         return {"status": "not-made", "message": f"A file or folder could not be read ({error}), so no overview was made."}, 1
+    except RecursionError:
+        return {"status": "not-made", "message": "The projects' parent lines nest too deep to show (hundreds of levels), so no "
+                                                 "overview was made. Check the parent lines in 1 Projects/."}, 1
+    except OverflowError:
+        return {"status": "not-made", "message": "A date is too near the start or end of the calendar to work with, so no "
+                                                 "overview was made."}, 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -909,7 +1259,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--asked", help="the owner's question, for the page's Asked line")
     parser.add_argument("--as-at", help="the moment to make the overview for, with its offset (default: now)")
     parser.add_argument("--template", help="a customised copy of the page template (default: the shipped one)")
-    parser.add_argument("--save", action="store_true", help="save the page as a new file in Views/ and read it back")
+    parser.add_argument("--save", action="store_true", help="save the page as a new file in 2 Views/ and read it back")
     return parser
 
 

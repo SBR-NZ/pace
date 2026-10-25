@@ -161,7 +161,7 @@ class Lab:
         r.write("PACE/Pace.md", "# Pace\n\nTemplate entry point v1.\n")
         r.write("PACE/AGENTS.md", "Read Pace.md in this PACE folder.\n")
         r.write("PACE/Record/.gitkeep", "")
-        r.write("PACE/My add-ins/.gitkeep", "")
+        r.write("PACE/3 My add-ins/.gitkeep", "")
         r.write("PACE/Product/Help/updates.md", "# Product updates\n\nInvented help v1.\n")
         r.write("PACE/Product/Help/records.md", "# Records\n\nInvented help v1.\n")
         r.write("PACE/Product/Help/old.md", "# Old page\n\nRemoved later.\n")
@@ -178,7 +178,7 @@ class Lab:
         # PaceFolder templates outside Product change too; an update must never install them.
         r.write("PACE/Pace.md", "# Pace\n\nTemplate entry point v2, would overwrite the owner.\n")
         r.write("PACE/AGENTS.md", "Template pointer v2.\n")
-        r.write("PACE/My add-ins/Daily brief - mine/ADD-IN.md", "template copy\n")
+        r.write("PACE/3 My add-ins/Daily brief - mine/ADD-IN.md", "template copy\n")
         self.c2 = r.commit("Release 3.2.0")
         r.tag("v3.2.0")
 
@@ -199,15 +199,15 @@ class Lab:
             return
         files = {
             "Pace.md": ("# Pace by Simply Better Reports\n\nThe owner's own entry point.\n\n"
-                        "- **Daily brief** - Mine. `My add-ins/Daily brief - mine/ADD-IN.md`\n"
+                        "- **Daily brief** - Mine. `3 My add-ins/Daily brief - mine/ADD-IN.md`\n"
                         "- See [old page](Product/Help/old.md) and [updates](Product/Help/updates.md).\n"),
             "AGENTS.md": "Read Pace.md in this PACE folder.\n",
             "CLAUDE.md": "Read Pace.md in this PACE folder.\n",
             ".github/copilot-instructions.md": "Read Pace.md in this PACE folder.\n",
             "Record/2026-10-01 0900 Invented Bakery decision.md": "Invented decision: move the stocktake.\n",
-            "Projects/Invented Bakery/Forecast/Documents/model.xlsx": b"PK\x03\x04invented workbook",
+            "1 Projects/Invented Bakery/Forecast/Documents/model.xlsx": b"PK\x03\x04invented workbook",
             "Repos/Invented Bakery/Forecast/forecast-repo.md": "Link: https://example.invalid/forecast\n",
-            "My add-ins/Daily brief - mine/ADD-IN.md": "# Daily brief - mine\n\n**Customised from:** Daily brief\n",
+            "3 My add-ins/Daily brief - mine/ADD-IN.md": "# Daily brief - mine\n\n**Customised from:** Daily brief\n",
         }
         for rel, data in files.items():
             target = root / rel
@@ -339,7 +339,7 @@ class ApplyTests(UpdateCase):
         self.assertEqual(latest["changes"]["changed"], ["Help/records.md"])
 
     def test_shipped_add_ins_update_and_owner_copies_never_do(self):
-        mine = self.lab.root / "My add-ins/Daily brief - mine/ADD-IN.md"
+        mine = self.lab.root / "3 My add-ins/Daily brief - mine/ADD-IN.md"
         before = mine.read_bytes()
         self.lab.apply("v3.2.0", self.lab.c2)
         self.assertEqual((self.lab.root / "Product/Pace add-ins/Daily brief/ADD-IN.md").read_text(encoding="utf-8"),
@@ -373,9 +373,9 @@ class ApplyTests(UpdateCase):
 
 
 class OwnerAddInPlaceTests(UpdateCase):
-    """Owner add-ins in `My add-ins/`, or in an older folder's `Pace/Add-ins/My add-ins/`, are listed, kept and never moved."""
+    """Owner add-ins in `3 My add-ins/`, or in an older folder's `Pace/Add-ins/My add-ins/`, are listed, kept and never moved."""
 
-    NEW = "My add-ins"
+    NEW = "3 My add-ins"
     OLDER = "Pace/Add-ins/My add-ins"
 
     def add_board_notes(self, place, help_link):
@@ -390,7 +390,7 @@ class OwnerAddInPlaceTests(UpdateCase):
         (self.lab.root / place / ".gitkeep").write_bytes(b"")
 
     def move_to_the_older_place(self):
-        """Turn the lab's owner folder into one made before `My add-ins/` moved to the top."""
+        """Turn the lab's owner folder into one made before `3 My add-ins/` moved to the top."""
         older = self.lab.root / self.OLDER
         older.parent.mkdir(parents=True)
         shutil.move(str(self.lab.root / self.NEW), str(older))
@@ -404,7 +404,7 @@ class OwnerAddInPlaceTests(UpdateCase):
         pace_before = (self.lab.root / "Pace.md").read_bytes()
         preview = self.lab.preview("v3.2.0", self.lab.c2)
         self.assertEqual(preview["owner_addins_never_updated"], ["Board notes", "Daily brief - mine"])
-        self.assertIn("My add-ins/", preview["protected"])
+        self.assertIn("3 My add-ins/", preview["protected"])
         for tag, commit in (("v3.2.0", self.lab.c2), ("v3.3.0", self.lab.c3)):
             result = self.lab.apply(tag, commit)
             self.assertEqual(result["status"], "installed", result.get("message"))
@@ -433,7 +433,7 @@ class OwnerAddInPlaceTests(UpdateCase):
         self.assertTrue(self.lab.records()[-1]["outside_product"]["unchanged"])
         self.assertEqual(tree_bytes(self.lab.root / self.OLDER), before)
         self.assertEqual(owner_view(self.lab.root), owner_before)
-        # Nothing was moved or made in the new place, though the release's own PACE has a My add-ins folder.
+        # Nothing was moved or made in the new place, though the release's own PACE has a 3 My add-ins folder.
         self.assertFalse((self.lab.root / self.NEW).exists())
         # The owner's index line still names a file that is there.
         index_path = re.search(r"`([^`]+/ADD-IN\.md)`", (self.lab.root / "Pace.md").read_text(encoding="utf-8"))[1]
@@ -463,7 +463,7 @@ class OwnerAddInPlaceTests(UpdateCase):
         self.assertEqual(mine.read_text(encoding="utf-8"), "Owner wrote this mid-update, a little longer.\n")
 
     def test_help_names_both_places_and_how_to_move(self):
-        [bullet] = [line for line in HELP.read_text(encoding="utf-8").splitlines() if line.startswith("- `My add-ins/`")]
+        [bullet] = [line for line in HELP.read_text(encoding="utf-8").splitlines() if line.startswith("- `3 My add-ins/`")]
         self.assertIn(f"`{self.OLDER}/` in an older folder", bullet)
         self.assertIn("An update never moves them", bullet)
         link = re.search(r"\]\((add-ins\.md)#([a-z-]+)\)", bullet)
