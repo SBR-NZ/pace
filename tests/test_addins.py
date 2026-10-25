@@ -29,6 +29,7 @@ CATALOGUE = (
     "What was reported",
     "Reminders",
     "Open work",
+    "Weekly review",
     "Power BI",
     "Xero",
     "Contracts",

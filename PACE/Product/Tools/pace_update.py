@@ -498,6 +498,20 @@ def fetch_release(repo: str, tag: str, commit: str | None, *, folder: str = PROD
 # but not a numbered name such as 1 Projects/ or the older Pace/Add-ins/My add-ins/.
 OLD_FOLDER_PATH = re.compile(r"(?<![\w/.-])(?<!\d )(?:Projects|Views|My add-ins)/")
 LEFT_BEHIND = {".gitkeep", "desktop.ini", ".ds_store", "thumbs.db"}  # files systems leave in an emptied folder
+# Files Finder and Windows Explorer add to a folder someone only looked at. They are not edits to Product.
+SYSTEM_FILES = {"desktop.ini", ".ds_store", "thumbs.db"}
+
+
+def _same_folder(one: Path, other: Path) -> bool:
+    try:
+        return os.path.samefile(one, other)
+    except OSError:
+        return False
+
+
+def _without_system_files(entries: dict) -> dict:
+    """A Product file list without the files Finder or Windows Explorer leave behind in any folder."""
+    return {path: value for path, value in entries.items() if path.rsplit("/", 1)[-1].lower() not in SYSTEM_FILES}
 
 
 def _has_content(folder: Path) -> bool:
@@ -525,8 +539,8 @@ def folder_renames(root: Path, release: dict) -> list:
         else:
             continue
         source, target = root / have, root / want
-        if not source.is_dir():
-            continue
+        if not source.is_dir() or (target.is_dir() and _same_folder(source, target)):
+            continue  # nothing there, or a link under one name that leads to the folder under the other
         if not target.exists() and not target.is_symlink():
             step = f"rename {have}/ to {want}/"
         elif not target.is_dir():
@@ -743,7 +757,8 @@ def _owner_addins(root: Path) -> list:
     for place, prefix in ((OWNER_ADDINS, ""), (OLDER_OWNER_ADDINS, OLDER_OWNER_ADDINS + "/")):
         folder = root / place
         if folder.is_dir():
-            found += sorted(prefix + p.name for p in folder.iterdir() if p.name != ".gitkeep")
+            # An add-in is a folder; a file beside them, such as the owner's Assistant setup.md, is not one.
+            found += sorted(prefix + p.name for p in folder.iterdir() if p.is_dir())
     return found
 
 
@@ -1246,19 +1261,8 @@ def _plan(root: Path, repo: str, tag: str, commit: str | None, upstream: dict | 
         }
     old = read_tree(root / PRODUCT)
     prior = installed_release(root)
-    changed_since = None
-    if prior:
-        recorded = _entries_from_record(prior)
-        noted = prior.get("product_file_list", {}).get("digest")
-        if recorded and recorded != old:
-            changed_since = _compare(recorded, old)
-        elif not recorded and noted and noted != file_list_digest(old):
-            # The release note keeps a fingerprint, not a file list, so the files cannot be named.
-            changed_since = {"added": [], "changed": [], "removed": [], "not_listed": True}
-        elif not recorded and not noted:
-            # Nothing was kept to compare with (a hand-written release note), so edits cannot be ruled out.
-            changed_since = {"added": [], "changed": [], "removed": [], "not_checked": True}
-    already = bool(prior and prior.get("commit") == release["commit"] and old == new)
+    changed_since = product_changes(prior, old)
+    already = bool(prior and prior.get("commit") == release["commit"] and _without_system_files(old) == new)
     return {
         "release": release,
         "new": new,
@@ -1276,6 +1280,29 @@ def _plan(root: Path, repo: str, tag: str, commit: str | None, upstream: dict | 
         "pace_md": plan_pace_md((root / "Pace.md").read_bytes() if (root / "Pace.md").is_file() else None,
                                 release.get("pace_md")),
     }
+
+
+def product_changes(prior: dict | None, old: dict) -> dict | None:
+    """How the Product on disk (old) differs from the release recorded as installed (prior), or None when it does not.
+
+    Only reads: the updater uses it before an install, and the health check to say whether Product was edited."""
+    if not prior:
+        return None
+    # A file Finder or Explorer added, such as .DS_Store, is not an edit, so it never stops an update.
+    old = _without_system_files(old)
+    recorded = _entries_from_record(prior)
+    if recorded:
+        recorded = _without_system_files(recorded)
+    noted = prior.get("product_file_list", {}).get("digest")
+    if recorded and recorded != old:
+        return _compare(recorded, old)
+    if not recorded and noted and noted != file_list_digest(old):
+        # The release note keeps a fingerprint, not a file list, so the files cannot be named.
+        return {"added": [], "changed": [], "removed": [], "not_listed": True}
+    if not recorded and not noted:
+        # Nothing was kept to compare with (a hand-written release note), so edits cannot be ruled out.
+        return {"added": [], "changed": [], "removed": [], "not_checked": True}
+    return None
 
 
 def _kept_by(prior: dict) -> str:
@@ -1652,7 +1679,7 @@ def _matches_installed(root: Path) -> bool:
     if not digest or _is_link(product) or not product.is_dir():
         return False
     try:
-        return file_list_digest(read_tree(product)) == digest
+        return file_list_digest(_without_system_files(read_tree(product))) == digest
     except (OSError, Stop):
         return False
 

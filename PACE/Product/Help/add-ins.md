@@ -30,6 +30,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 | What was reported | The exact words of each reporting occasion, and what was reported, when and to whom. |
 | Reminders | A dated follow-up in the record, and a timed reminder where the host can set one. |
 | Open work | A complete list of open work, or of everything recorded in one year. |
+| Weekly review | Going through open work with the owner, and recording what is done, cancelled, given a date or owed by someone else. |
 | Power BI | Reading figures from Power BI, only through a read-only connection the host actually has. |
 | Xero | Reading figures from Xero, only through the owner's own Xero connection when the host has one. |
 | Contracts | Setting down how one workbook or recurring job must work, and reading back what is built. |
@@ -47,6 +48,7 @@ To switch an add-in on, add its line to the add-in index in `Pace.md`, below the
 - **What was reported** - Keep the exact words of each reporting occasion, and answer what was reported, when and to whom. `Product/Pace add-ins/What was reported/ADD-IN.md`
 - **Reminders** - Keep a dated follow-up in the record and, where the host can, set a timed reminder in its own app. `Product/Pace add-ins/Reminders/ADD-IN.md`
 - **Open work** - Make a complete list of open work, or of everything recorded in one year. `Product/Pace add-ins/Open work/ADD-IN.md`
+- **Weekly review** - Go through open work with the owner, and record what is done, cancelled, given a date or owed by someone else. `Product/Pace add-ins/Weekly review/ADD-IN.md`
 - **Power BI** - Read figures from a Power BI report or model, only through a read-only connection this host actually has. `Product/Pace add-ins/Power BI/ADD-IN.md`
 - **Xero** - Read figures from Xero reports, only through the owner's own Xero connection when this host has one. `Product/Pace add-ins/Xero/ADD-IN.md`
 - **Contracts** - Set down in plain English how one workbook or recurring job must work, then read back what is built against it. `Product/Pace add-ins/Contracts/ADD-IN.md`

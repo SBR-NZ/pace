@@ -50,6 +50,10 @@ REQUEST_START = re.compile(rf"^(\d{{8}}T\d{{6}}Z)--({ID})--([a-z0-9]{{6}})")
 KEY_LINE = re.compile(r"^([a-z][a-z0-9-]*):(.*)$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TIME_ZONE_LINE = re.compile(r"^\s*(?:[-*]\s+)?time zone:(.*)$", re.I)
+OWNER_LINE = re.compile(r"^owner\s*:\s*(.*)$", re.I)  # one line of the part The owner's name, once tidied
+OWNER_PART = "the-owner-s-name"  # that part's id, from its heading, whichever apostrophe it is written with
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 MAX_ID = 40
 MAX_RECORD_BYTES = 64 * 1024
 DUPLICATE_WINDOW = dt.timedelta(days=7)
@@ -491,6 +495,49 @@ def owner_time_zone(pace: Path) -> tuple:
                          "Pacific/Auckland, and on Windows install Python's tzdata package") from None
 
 
+def owner_line_name(line: str) -> str:
+    """The name an Owner line gives, or "" when the line is not one. A bullet, backticks or bold around it are allowed,
+    as are quotes around the name and a space before the colon: "- **Owner:** Rangi", "`Owner : Rangi`"."""
+    text = line.strip()
+    if text[:2] in ("- ", "* "):
+        text = text[2:].strip()
+    if len(text) > 1 and text[0] == text[-1] == "`":
+        text = text[1:-1].strip()
+    match = OWNER_LINE.match(text.replace("**", "").replace("__", ""))
+    if not match:
+        return ""
+    name = match.group(1).strip().strip("`").strip().strip("\"'\u201c\u201d\u2018\u2019").strip()
+    return " ".join(name.split())
+
+
+def owner_names(pace: Path) -> list:
+    """The owner's names from the Owner lines in the part of Pace.md called The owner's name, as records write them.
+
+    One name per line, in the order written, without repeats. Lines anywhere else are never read as names, so a
+    standing instruction that starts "Owner:" is not taken for one. Empty when there are none, or when Pace.md is
+    missing or cannot be read; a tool that relies on the names then says so.
+    """
+    try:
+        text = (pace / "Pace.md").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    names: list = []
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = re.sub(r"[^a-z0-9]+", "-", line[3:].lower()).strip("-") == OWNER_PART
+            continue
+        name = owner_line_name(line) if inside else ""
+        if name and name.casefold() not in {known.casefold() for known in names}:
+            names.append(name)
+    return names
+
+
+def day_words(day: dt.date) -> str:
+    """A day in plain words, such as 6 November 2026, whatever this computer's language."""
+    return f"{day.day} {MONTHS[day.month - 1]} {day.year}"
+
+
 def rel(pace: Path, path: Path) -> str:
     try:
         return path.relative_to(pace).as_posix()
@@ -913,10 +960,11 @@ def find_duplicates(record_dir: Path, fields: dict, body: str, request: str) -> 
     return sorted(found)
 
 
-def corrections_of(record_dir: Path, request: str, project: str, all_projects=False):
-    """Scan records in the project made from a day before `request` on. Returns (map corrects->list, opened, issues)."""
+def corrections_of(record_dir: Path, request: str, project: str, all_projects=False, window=True):
+    """Scan records in the project made from a day before `request` on, or every one of them with window=False.
+    Returns (map corrects->list, opened, issues)."""
     names, copies, issues = scan_record_names(record_dir)
-    start = request_time(request) - dt.timedelta(days=1)
+    start = request_time(request) - dt.timedelta(days=1) if window else dt.datetime.min.replace(tzinfo=UTC)
     by_predecessor: dict = {}
     opened = 0
     for stem, name in sorted(names.items()):
@@ -1034,7 +1082,9 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
                           False, request=request)
         if one(before["fields"], "project") != project:
             return result("not-saved", f"Not saved: {corrects} belongs to project {one(before['fields'], 'project')}; a correction stays in the same project.", False, request=request)
-        later, _, _ = corrections_of(record_dir, corrects, project)
+        # Every record in the project, so a correction whose request id is earlier than this one, as a computer with
+        # a wrong clock can make, is still found.
+        later, _, _ = corrections_of(record_dir, corrects, project, window=False)
         if later.get(corrects):
             newer = sorted(later[corrects])
             if len(newer) > 1:
@@ -1286,6 +1336,10 @@ def cmd_history(args) -> tuple:
     # Later versions: scan the project from the earliest version on.
     later, opened, scan_issues = corrections_of(record_dir, root, project, all_projects=args.all_projects)
     issues.extend(scan_issues)
+    # Corrections are followed through every record in the project, so one whose request id is earlier than the
+    # record it corrects, as a computer with a wrong clock can make, still counts; which files make the history
+    # incomplete is judged as before.
+    later, _, _ = corrections_of(record_dir, root, project, all_projects=args.all_projects, window=False)
     queue = [root]
     tree: dict = {}
     while queue:
@@ -1343,6 +1397,175 @@ def cmd_history(args) -> tuple:
     return result(status, message + " " + coverage, status in ("found", "withdrawn"),
                   request=request, current=current, withdrawn_by=withdrawn, versions=versions,
                   corrections=tree, missing=missing, coverage=coverage, issues=issues)
+
+
+ACTION_CHANGE_FIELDS = (("state", "state"), ("due", "due"), ("owed-by", "owed_by"), ("for", "owed_to"))
+# Who said it and when come from the update itself; every other line of the current account is carried over.
+FROM_THE_UPDATE = ("format", "request", "created", "from", "who", "words", "by", "captured", "corrects")
+
+
+def item_story(record_dir: Path, request: str, project: str) -> dict:
+    """The story of the item a record belongs to, read from every record in its project.
+
+    Returns its records ("members"), the accounts that stand now ("current"), whether its corrections loop, and the
+    files that could belong to it but cannot be relied on: a second copy of one of its records, or a record in the
+    project that cannot be read. A missing earlier record hides no later account, so it stops nothing here."""
+    names, copies, _ = scan_record_names(record_dir)
+    fields_of, unreliable = {}, []
+    for stem, name in sorted(names.items()):
+        if REQUEST.match(stem).group(2) != project:
+            continue
+        item = load(record_dir, name)
+        if item["state"] in ("readable", "invalid"):
+            fields_of[stem] = item["fields"]
+        elif item["state"] != "missing":
+            unreliable.append(f"{RECORD_DIR}/{name}")
+
+    def root_of(stem: str) -> tuple:
+        path, node = [stem], stem
+        while True:
+            earlier = one(fields_of.get(node, {}), "corrects")
+            if not earlier:
+                return node, False
+            if earlier in path:
+                return min(path[path.index(earlier):]), True
+            if earlier not in fields_of:
+                return earlier, False
+            path.append(earlier)
+            node = earlier
+
+    root, _ = root_of(request)
+    members = {stem for stem in fields_of if root_of(stem)[0] == root}
+    looped = any(root_of(stem)[1] for stem in members)
+    later: dict = {}
+    for stem in members:
+        earlier = one(fields_of[stem], "corrects")
+        if earlier:
+            later.setdefault(earlier, []).append(stem)
+    current = sorted(stem for stem in members if not later.get(stem) and one(fields_of[stem], "kind") != "withdrawal")
+    unreliable += [f"{RECORD_DIR}/{name}" for copied, name in copies if copied in members or copied == root]
+    return {"members": members, "current": current, "loop": looped, "unreliable": sorted(unreliable)}
+
+
+def action_changes(fields: dict, args) -> tuple:
+    """The new value of each action field this update gives, and the change in plain words, as (values, sentences).
+
+    "none" clears due, owed-by or for. A field the update does not give keeps its current value."""
+    values, sentences = {}, []
+    for key, attr in ACTION_CHANGE_FIELDS:
+        now = one(fields, key) or ("open" if key == "state" else "")
+        given = getattr(args, attr)
+        new = now if given is None else ("" if given.strip().lower() == NO_PROJECT and key != "state" else tidy_value(given))
+        values[key] = new
+        if new == now:
+            continue
+        if key == "state":
+            sentences.append({"done": "Done.", "cancelled": "Cancelled.", "open": "Open again."}.get(new, f"State: {new}."))
+        elif key == "due":
+            was = f" (was {day_words(parse_date(now))})" if parse_date(now) else ""
+            sentences.append(f"Due {day_words(parse_date(new))}{was}." if new else f"No due date now{was}.")
+        else:
+            label = "owed by" if key == "owed-by" else "for"
+            was = f" (was {now})" if now else ""
+            sentences.append(f"Now {label} {new}{was}." if new else f"No longer {label} {now}.")
+    return values, sentences
+
+
+def cmd_update_action(args) -> tuple:
+    """Save a correction of an action's current account that changes its state, due day, who owes it or who it is for.
+
+    Everything else is carried over from the current account: its project, subjects, sources, every other header line
+    and its text, with the change added in plain words. Who said it and when come from this update, and a project's
+    owner, target and status, which mean nothing on an action, are left out. It is an ordinary correction, saved and
+    read back by save_record."""
+    pace = pace_folder(args.pace)
+    args.pace_path = pace
+    record_dir = pace / RECORD_DIR
+    earlier = args.corrects or ""
+    if not REQUEST.match(earlier):
+        return result("not-saved", "Not saved: --corrects needs the request id of the action's current account.", False)
+    if not REQUEST.match(args.request or ""):
+        return result("not-saved", "Not saved: a request id is needed first (use new-request with the action's project), "
+                      "so a retry can be recognised.", False)
+    if not record_dir.is_dir():
+        return result("not-saved", f"Not saved: {RECORD_DIR}/ was not found in {pace}. Check the Pace folder and that it is available here.", False)
+    before = load(record_dir, f"{earlier}.md")
+    if before["state"] == "missing":
+        return result("not-saved", f"Not saved: {earlier} was not found in {RECORD_DIR}/ here.", False, request=args.request)
+    if before["state"] != "readable":
+        return result("not-saved", f"Not saved: {earlier} cannot be relied on ({'; '.join(before.get('problems') or [])}). "
+                      "Fix it with create, as records help describes.", False, request=args.request)
+    old = before["fields"]
+    if one(old, "kind") != "action":
+        return result("not-saved", f"Not saved: {earlier} is a {one(old, 'kind')}, not an action. Correct it with create.",
+                      False, request=args.request)
+    project = one(old, "project")
+    if REQUEST.match(args.request).group(2) != project:
+        return result("not-saved", f"Not saved: the request {args.request} is for project {REQUEST.match(args.request).group(2)}, "
+                      f"but the action is in {project}. Make the request with new-request --project {project}.",
+                      False, request=args.request)
+    if args.due is not None and args.due.strip().lower() != NO_PROJECT and parse_date(args.due.strip()) is None:
+        return result("not-saved", f"Not saved: due must be a real date like 2026-11-05, or none, not {args.due!r}.",
+                      False, request=args.request)
+    values, sentences = action_changes(old, args)
+    if not sentences:
+        return result("not-saved", "Not saved: nothing would change. Give a new --state, --due, --owed-by or --for.",
+                      False, request=args.request)
+    changed = {key for key, _ in ACTION_CHANGE_FIELDS}
+    fields = {key: list(values) for key, values in old.items()
+              if key not in FROM_THE_UPDATE and key not in changed and key not in PROJECT_FIELDS}
+    fields.update({"request": [args.request], "from": [args.origin], "by": [args.by], "corrects": [earlier]})
+    for key, value in (("who", args.who), ("words", args.words), ("captured", args.captured)):
+        if value and tidy_value(value):
+            fields[key] = [tidy_value(value)]
+    sources = list(old.get("source") or [])
+    try:
+        given = [tidy_value(item) for item in args.source or [] if tidy_value(item)]
+        given += [source_line(pace, Path(item)) for item in args.source_file or []]
+    except OSError as error:
+        return result("not-saved", f"Not saved: a source file could not be read ({error}).", False, request=args.request)
+    sources += [item for item in given if item not in sources]
+    if sources:
+        fields["source"] = sources
+    for key, _ in ACTION_CHANGE_FIELDS:
+        if values[key]:
+            fields[key] = [values[key]]
+    if args.body is not None:
+        body = tidy_body(args.body)
+    else:
+        body = tidy_body("\n\n".join(part for part in (before["body"], " ".join(sentences), args.note or "") if part.strip()))
+    path = record_dir / f"{args.request}.md"
+    if not path.exists():
+        # Only the current account can be corrected, and never while it is recorded two ways.
+        story = item_story(record_dir, earlier, project)
+        current = story["current"]
+        if story["loop"]:
+            return result("not-saved", f"Not saved: the corrections of {earlier} correct each other, so none of them is the "
+                          "current account. Ask the owner which account stands and save it as a new record; the record "
+                          "tool cannot correct records that correct each other.", False, request=args.request)
+        if story["unreliable"]:
+            return result("not-saved", f"Not saved: {', '.join(story['unreliable'])} could be part of this item's story but "
+                          "cannot be relied on, so its current account is not settled. Compare them with the owner first.",
+                          False, request=args.request, unreliable=story["unreliable"])
+        if len(current) > 1:
+            others = [stem for stem in current if stem != earlier]
+            return result("not-saved", f"Not saved: this item is recorded two ways ({', '.join(current)}). Ask the owner which "
+                          f"stands. Save a withdrawal of the other (create --kind withdrawal --corrects {others[0]}), then "
+                          "update the one that stands.", False, request=args.request, current=current)
+        if not current:
+            return result("not-saved", f"Not saved: {earlier} was withdrawn, so there is nothing to update.", False,
+                          request=args.request)
+        if current != [earlier]:
+            return result("not-saved", f"Not saved: {earlier} is not the current account; {current[0]} is. Update that one.",
+                          False, request=args.request, current=current)
+    # The project id comes from the action itself, so a project whose folder is missing here does not stop it.
+    args.allow_unknown_project = True
+    out, code = save_record(pace, args, fields, body)
+    out["corrects"] = earlier
+    out["changes"] = sentences
+    if out["status"] in ("saved", "already-saved"):
+        out["message"] += f" It corrects {earlier}: {' '.join(sentences)}"
+    return out, code
 
 
 def cmd_listing(args) -> tuple:
@@ -1443,12 +1666,21 @@ def has_content(folder: Path) -> bool:
         return True
 
 
+def same_folder(one_path: Path, other: Path) -> bool:
+    """True when two paths are one folder, for example a link or junction kept under the old name."""
+    try:
+        return os.path.samefile(one_path, other)
+    except OSError:
+        return False
+
+
 def old_folder_steps(pace: Path) -> list:
-    """What to do about each folder still named as before 3.11.0: rename it, or move what is in it when both exist."""
+    """What to do about each folder still named as before 3.11.0: rename it, or move what is in it when both exist.
+    A link under the old name that leads to the numbered folder needs nothing doing."""
     steps = []
     for name, new in RENAMED_FOLDERS.items():
         old, numbered = pace / name, pace / new
-        if not old.is_dir():
+        if not old.is_dir() or same_folder(old, numbered):
             continue
         if not numbered.exists():
             steps.append(f"rename {name}/ to {new}/")
@@ -1837,6 +2069,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-unknown-project", action="store_true")
     p.set_defaults(run=cmd_create)
 
+    p = sub.add_parser("update-action", help="save a correction that marks an action done or cancelled, or changes its due "
+                       "day or who owes it, carrying over the rest of its current account")
+    p.add_argument("--request", required=True, help="a new request id in the action's project (reuse it for a retry)")
+    p.add_argument("--corrects", required=True, help="the request id of the action's current account")
+    p.add_argument("--state", choices=ACTION_STATES)
+    p.add_argument("--due", help="the new due day, like 2026-11-05, or none to clear it")
+    p.add_argument("--owed-by", help="who owes it now, or none")
+    p.add_argument("--for", dest="owed_to", help="who it is for now, or none")
+    p.add_argument("--from", dest="origin", choices=ORIGINS, required=True)
+    p.add_argument("--who")
+    p.add_argument("--words")
+    p.add_argument("--source", action="append", default=[])
+    p.add_argument("--source-file", action="append", default=[], help="a source file; its place and fingerprint are recorded")
+    p.add_argument("--by", required=True)
+    p.add_argument("--captured", choices=CAPTURED)
+    p.add_argument("--note", help="a line to add below the change, in plain words")
+    p.add_argument("--body", help="the whole text instead of the carried-over text and the change")
+    p.add_argument("--not-a-duplicate", action="store_true", help="the owner says this is a separate record")
+    p.set_defaults(run=cmd_update_action, allow_unknown_project=True)
+
     p = sub.add_parser("propose", help="fingerprint an exact act file to show the owner; does not save")
     p.add_argument("--act", required=True, help="plain description of the exact act")
     p.add_argument("--act-file", required=True, help="file with the exact proposed content")
@@ -1927,6 +2179,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def print_result(out: dict) -> None:
+    """Print one JSON object. A file name that is not valid text, as a folder can hold, is escaped rather than lost."""
+    try:
+        print(json.dumps(out, indent=1, ensure_ascii=False))
+    except UnicodeEncodeError:
+        print(json.dumps(out, indent=1, ensure_ascii=True))
+
+
 def report_kept_temp_files(out: dict, args) -> None:
     """Name each temporary file this command could not delete, in its result."""
     try:
@@ -1953,7 +2213,7 @@ def main(argv=None) -> int:
         out, code = {"status": "not-run", "message": str(error)}, 1
     if KEPT_TEMP_FILES:
         report_kept_temp_files(out, args)
-    print(json.dumps(out, indent=1, ensure_ascii=False))
+    print_result(out)
     return code
 
 

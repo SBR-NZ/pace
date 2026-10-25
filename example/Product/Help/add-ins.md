@@ -30,6 +30,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 | What was reported | The exact words of each reporting occasion, and what was reported, when and to whom. |
 | Reminders | A dated follow-up in the record, and a timed reminder where the host can set one. |
 | Open work | A complete list of open work, or of everything recorded in one year. |
+| Weekly review | Going through open work with the owner, and recording what is done, cancelled, given a date or owed by someone else. |
 | Power BI | Reading figures from Power BI, only through a read-only connection the host actually has. |
 | Xero | Reading figures from Xero, only through the owner's own Xero connection when the host has one. |
 | Contracts | Setting down how one workbook or recurring job must work, and reading back what is built. |
@@ -47,6 +48,7 @@ To switch an add-in on, add its line to the add-in index in `Pace.md`, below the
 - **What was reported** - Keep the exact words of each reporting occasion, and answer what was reported, when and to whom. `Product/Pace add-ins/What was reported/ADD-IN.md`
 - **Reminders** - Keep a dated follow-up in the record and, where the host can, set a timed reminder in its own app. `Product/Pace add-ins/Reminders/ADD-IN.md`
 - **Open work** - Make a complete list of open work, or of everything recorded in one year. `Product/Pace add-ins/Open work/ADD-IN.md`
+- **Weekly review** - Go through open work with the owner, and record what is done, cancelled, given a date or owed by someone else. `Product/Pace add-ins/Weekly review/ADD-IN.md`
 - **Power BI** - Read figures from a Power BI report or model, only through a read-only connection this host actually has. `Product/Pace add-ins/Power BI/ADD-IN.md`
 - **Xero** - Read figures from Xero reports, only through the owner's own Xero connection when this host has one. `Product/Pace add-ins/Xero/ADD-IN.md`
 - **Contracts** - Set down in plain English how one workbook or recurring job must work, then read back what is built against it. `Product/Pace add-ins/Contracts/ADD-IN.md`
@@ -63,6 +65,10 @@ Each line is the add-in's name in bold, a hyphen, its one-line purpose, and the 
 5. In `Pace.md`, change the path at the end of that add-in's line to the copy, for example `3 My add-ins/Daily brief - mine/ADD-IN.md`.
 
 The index line decides which file is used, so the customised copy is used in place of the shipped one, and the shipped file is no longer opened for that add-in. A file with the same name somewhere else never takes over by itself. A Product update never changes, removes or switches on anything in `3 My add-ins/`, and never rewrites `Pace.md` without the owner. When a shipped add-in changes, the customised copy stays as it is; the owner can ask to compare the two and adopt any change they want.
+
+## A rule for one kind of task
+
+When the owner gives a lasting rule that fits only one kind of task, such as a writing-style rule for the add-in that drafts their writing, it goes into that add-in instead of the `## Standing instructions` section of `Pace.md`. Propose the exact line and show it, name the add-in it would go into, and add it only on the owner's yes in their own words. If the add-in is a shipped one, customise it first as above, so the rule goes into the copy and the index line points to that copy; never edit the shipped file. Also save a decision record of the rule, as [Records and source evidence](records.md) describes. Removing or changing the rule follows the same steps.
 
 ## Making your own
 

@@ -329,7 +329,11 @@ class CreateOnlyHostTests(PaceFolder):
     def no_delete(self):
         def refuse(path, *args, **kwargs):
             raise PermissionError(13, "Deleting is not allowed here", str(path))
-        return mock.patch("os.unlink", side_effect=refuse)
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch("os.unlink", side_effect=refuse))
+        # Python 3.9's pathlib keeps its own reference to os.unlink, so Path.unlink is refused the same way.
+        stack.enter_context(mock.patch.object(Path, "unlink", autospec=True, side_effect=refuse))
+        return stack
 
     def temp_files(self, folder=None):
         return sorted(p.name for p in (folder or self.record).iterdir() if p.name.startswith(pr.TEMP_PREFIX))

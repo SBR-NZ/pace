@@ -454,15 +454,17 @@ class TemplateTests(unittest.TestCase):
         # Add-ins stay in plain words; the tool's commands live in the views help, as the record tool's live in records help.
         tool_help = section(read(HOSTS_HELP), "The overview tool")
         commands = re.findall(r"^python3 Product/Tools/pace_overview\.py (.*)$", tool_help, re.M)
-        self.assertEqual(len(commands), 3)
+        self.assertEqual(len(commands), 4)
         parser = po.build_parser()
         for command in commands:
             with self.subTest(command=command):
                 args = parser.parse_args(re.sub(r'"<[^>]*>"|<[^>]*>', "x", command).split())
-                self.assertTrue(args.save)
-                self.assertEqual(args.owner, ["x"])
+                self.assertEqual(args.save, not args.review)  # the review list is for chat and never saved
+                self.assertIsNone(args.owner)  # the owner's names come from Pace.md's Owner: lines
         self.assertIn("--project", commands[1])
         self.assertIn("--by-person", commands[2])
+        self.assertEqual(commands[3], "--review")
+        self.assertIn("The owner's names come from the `Owner:` lines in `Pace.md`", tool_help)
         for phrase in ("Python 3.9 or later", "never replacing a file", "reads it back", "--template",
                        "takes only the style block, wordmark and footer from it",
                        "`saved` only when the page was saved and read back", "`placed-not-confirmed`", "`not-made`",

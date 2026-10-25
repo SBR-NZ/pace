@@ -21,6 +21,12 @@ RECORD_TOOL = PACE_FOLDER / "Product/Tools/pace_record.py"
 
 
 class WholePaceFolderTest(unittest.TestCase):
+    def test_the_example_carries_the_shipped_product_exactly(self):
+        # It drifted: its copy lacked the licence and parts of three help pages that its own Pace.md links to.
+        shipped, example = pu.read_tree(PACE_FOLDER / "Product"), pu.read_tree(EXAMPLE / "Product")
+        self.assertEqual(sorted(example), sorted(shipped))
+        self.assertEqual([path for path in shipped if shipped[path] != example[path]], [])
+
     def test_standing_instructions_section_is_empty_and_identical(self):
         # Both Pace.md files carry the same short, empty section directly after "Two boundaries".
         sections = []

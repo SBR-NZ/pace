@@ -109,12 +109,16 @@ def day_and_age(day: dt.date | None, today: dt.date) -> str:
 class Folder:
     """Everything the overview needs from one Pace folder, read once."""
 
-    def __init__(self, pace: Path, owners, as_at: str | None):
+    def __init__(self, pace: Path, owners, as_at: str | None, zone_problem_ok: bool = False):
         self.pace = pace
+        self.zone_problem = ""
         try:
             self.zone_name, zone = pr.owner_time_zone(pace)
         except ValueError as error:
-            raise Stop(f"Could not use your time zone: {error}. No page was made, and no time zone was guessed.") from None
+            if not zone_problem_ok:
+                raise Stop(f"Could not use your time zone: {error}. No page was made, and no time zone was guessed.") from None
+            # The health check names the problem and still reads everything else, in this computer's time zone.
+            self.zone_problem, self.zone_name, zone = str(error), None, None
         if as_at:
             moment = pr.parse_time(as_at)
             if moment is None:
@@ -245,6 +249,8 @@ class Folder:
             self.problems.append(f"{pr.RECORD_DIR}/{', '.join(f'{p}.md' for p in sorted(pointers))} "
                                  f"{'corrects' if len(pointers) == 1 else 'correct'} {earlier}, but no file for it is in "
                                  f"{pr.RECORD_DIR}/ here.")
+        self.missing_corrected = {earlier: sorted(pointers) for earlier, pointers in sorted(missing.items())}
+        self.correction_loops = [sorted(cycle) for _, cycle in sorted(loops.items()) if len(cycle) > 1]
         for root, cycle in sorted(loops.items()):
             if len(cycle) > 1:
                 self.problems.append(f"The corrections in {pr.RECORD_DIR}/ loop: {', '.join(sorted(cycle))} correct each other, "
@@ -1089,6 +1095,106 @@ def by_person_view(folder: Folder) -> dict:
 
 # ---------------------------------------------------------------- the page
 
+# ---------------------------------------------------------------- the review list
+#
+# The Weekly review add-in goes through open work with the owner. The list is given in chat, never saved as a page:
+# work recorded two ways first, then overdue work, work due in the next 7 days, work someone else owes with no due
+# date, and the rest with no due date, oldest first. Work due later is counted, not listed. Items are numbered
+# from 1 across the whole list, so the owner can answer by number.
+
+REVIEW_GROUPS = (
+    ("two-ways", "Recorded two ways: say which account stands"),
+    ("overdue", "Overdue"),
+    ("due-soon", f"Due today and in the next {SOON_DAYS} days"),
+    ("waiting", "Waiting on others, with no due date"),
+    ("no-due-date", "No due date"),
+)
+
+
+def review_line(folder: Folder, number: int, item: dict) -> str:
+    """One item as plain text for the chat: its number, how late, soon or old it is, its subject, project and who owes it."""
+    if item["due"]:
+        when = how_soon(item["due"], folder.today)
+        when = ("due " + when) if not when.endswith("late") else when
+    else:
+        age = folder.age(item)
+        first = item.get("first") or item["request"]
+        day = folder.day(first) if first in folder.items else item["day"]
+        someone = bool(item["owed"]) and not folder.is_owner(item["owed"])
+        if age is not None:
+            when = "recorded today" if age == 0 else f"{'waiting' if someone else 'open'} {days_word(age)}"
+        elif day is not None:
+            # With no Time zone line, a record keeps the date it was written with, which can be after today here.
+            when = f"recorded {short_date(day)}"
+        else:
+            when = "first recorded day not known"
+    parts = [f"{number}. {when[0].upper() + when[1:]}", plain(item["subject"]), folder.label(item["project"])]
+    if item["owed"] and not folder.is_owner(item["owed"]):
+        parts.append(f"owed by {plain(item['owed'])}")
+    elif not item["owed"]:
+        parts.append("no person named")
+    return " - ".join(parts)
+
+
+def review_item(folder: Folder, number: int, item: dict) -> dict:
+    first = item.get("first") or item["request"]
+    first_day = folder.day(first) if first in folder.items else None
+    return {"number": number, "line": review_line(folder, number, item), "request": item["request"],
+            "project": item["project"], "project_name": folder.label(item["project"]), "subject": item["subject"],
+            "text": item["text"], "owed_by": item["owed"] or None, "for": item["for"] or None,
+            "state": item["state"] or None, "due": item["due"].isoformat() if item["due"] else None,
+            "when": how_soon(item["due"], folder.today) if item["due"] else None,
+            "first_recorded": first_day.isoformat() if first_day else None, "open_days": folder.age(item)}
+
+
+def review_view(folder: Folder, pid: str | None) -> dict:
+    """The review list for every project, or for one project and the projects inside it."""
+    if pid is not None and pid not in folder.projects:
+        raise Stop(f"No project with id {pid!r} is in {pr.PROJECTS_DIR}/. List them with the record tool's projects command."
+                   f"{pr.old_folder_names(folder.pace)}")
+    work = folder.work(set(folder.family(pid)) if pid else None)
+    soon = folder.today + dt.timedelta(days=SOON_DAYS)
+    sorted_items: dict = {key: [] for key, _ in REVIEW_GROUPS}
+    later = []
+    for item in work["open"]:  # already in the overview's order: overdue first, then by due date, then oldest first
+        if item["due"] and item["due"] < folder.today:
+            sorted_items["overdue"].append(item)
+        elif item["due"] and item["due"] <= soon:
+            sorted_items["due-soon"].append(item)
+        elif item["due"]:
+            later.append(item)
+        elif item["owed"] and not folder.is_owner(item["owed"]):
+            sorted_items["waiting"].append(item)
+        else:
+            sorted_items["no-due-date"].append(item)
+    groups, number = [], 0
+    for key, title in REVIEW_GROUPS:
+        entries = []
+        if key == "two-ways":
+            for accounts in work["two_ways"]:
+                number += 1
+                first = accounts[0]
+                entries.append({"number": number, "line": f"{number}. Recorded two ways - {plain(first['subject'])} - "
+                                f"{folder.label(first['project'])}", "project": first["project"],
+                                "project_name": folder.label(first["project"]), "subject": first["subject"],
+                                "accounts": [{"request": account["request"], "kind": account["kind"],
+                                              "state": account["state"] or None, "text": account["text"],
+                                              "due": account["due"].isoformat() if account["due"] else None,
+                                              "owed_by": account["owed"] or None,
+                                              "recorded": account["day"].isoformat() if account["day"] else None}
+                                             for account in accounts]})
+        else:
+            for item in sorted_items[key]:
+                number += 1
+                entries.append(review_item(folder, number, item))
+        if entries:
+            groups.append({"group": key, "title": title, "items": entries})
+    counts = {key: len(next((group["items"] for group in groups if group["group"] == key), [])) for key, _ in REVIEW_GROUPS}
+    counts["due_later"] = len(later)
+    return {"groups": groups, "counts": counts, "listed": number,
+            "next_later": min(item["due"] for item in later).isoformat() if later else None}
+
+
 def template_parts(text: str) -> dict:
     parts = {}
     for key, pattern in (("style", r"<style>.*?</style>"), ("wordmark", r'<svg class="wordmark".*?</svg>'),
@@ -1152,9 +1258,64 @@ def save_page(folder: Folder, name: str, page: str) -> tuple:
     return "not-saved", None, f"{VIEWS_DIR}/ already holds 99 pages named {name}; nothing was replaced."
 
 
+def searched_lines(folder: Folder) -> tuple:
+    """What was searched and what could not be read, in the page's words."""
+    files, projects = folder.files_in_record, len(folder.projects)
+    records = (f"All {files} record files in {pr.RECORD_DIR}/, each opened" if files > 1 else
+               f"The one record file in {pr.RECORD_DIR}/, opened" if files == 1 else f"{pr.RECORD_DIR}/, which holds no record files")
+    if folder.left_out:
+        records += (f"; {folder.left_out} made after this page's as-at moment {'was' if folder.left_out == 1 else 'were'} "
+                    "left out")
+    searched = (f"{records}, with corrections and withdrawals followed to the current account; and "
+                f"{'the one project' if projects == 1 else f'the {projects} projects'} in {pr.PROJECTS_DIR}/. "
+                "This computer's copy only; no cloud copy was checked.")
+    could_not_read = ("Partial: " + " ".join(folder.problems)) if folder.problems else "Nothing: every file listed was opened."
+    return searched, could_not_read
+
+
+def owner_note(given: list, named: list) -> str:
+    """What the result says about whose work counts as the owner's, when no name says so."""
+    if named or given:
+        return ""
+    return (" Pace.md has no Owner: line and no --owner was given, so only work owed by \"owner\" counts as yours; add "
+            "an Owner: line with your name as records write it, as Pace.md describes.")
+
+
+def review_result(folder: Folder, args, notes: str) -> tuple:
+    review = review_view(folder, args.project)
+    counts, searched_and_read = review["counts"], searched_lines(folder)
+    later = counts["due_later"]
+    said = (f"{review['listed']} to go through: {counts['two-ways']} recorded two ways, {counts['overdue']} overdue, "
+            f"{counts['due-soon']} due today or in the next {SOON_DAYS} days, {counts['waiting']} waiting on others with "
+            f"no due date and {counts['no-due-date']} with no due date. "
+            + (f"{later} more {'is' if later == 1 else 'are'} due later, from {review['next_later']}, and not in the list. "
+               if later else "")
+            + "Nothing was saved or changed.")
+    partial = " Partial: something could not be read; see could_not_read." if folder.problems else ""
+    scope = f"{folder.label(args.project)} and the projects inside it" if args.project else "every project"
+    return pr.result("made", f"Review list for {scope}, as at {long_moment(folder.now)}. {said}{partial}{notes}", True,
+                     view="review", as_at=long_moment(folder.now), groups=review["groups"], counts=counts,
+                     searched=searched_and_read[0], could_not_read=searched_and_read[1], complete=not folder.problems,
+                     housekeeping=folder.notes, time_zone=folder.zone_name, owner_names=sorted(folder.owner_names),
+                     folders_without_id=folder.unlabelled)
+
+
 def _run(args) -> tuple:
     pace = pr.pace_folder(args.pace)
-    folder = Folder(pace, args.owner or [], args.as_at)
+    named = pr.owner_names(pace)
+    owners = list(args.owner or []) + named
+    if args.review and args.by_person:
+        raise Stop("A review list covers every project or one project; leave out --by-person.")
+    if args.review and args.save:
+        raise Stop("A review list is gone through in chat and is never saved as a page; leave out --save.")
+    folder = Folder(pace, owners, args.as_at)
+    folder.owner_names = {" ".join(name.split()) for name in owners if name.strip()}
+    zone_note = (f" Dates are compared in {folder.zone_name} time, from Pace.md." if folder.zone_name else
+                 f" Pace.md names no time zone, so today is this computer's date ({folder.now.tzname()}) and each record "
+                 "keeps the date it was written with.")
+    notes = zone_note + owner_note(args.owner or [], named)
+    if args.review:
+        return review_result(folder, args, notes)
     template = Path(args.template).expanduser() if args.template else pace / TEMPLATE
     if not template.is_absolute():
         template = pace / template
@@ -1194,16 +1355,7 @@ def _run(args) -> tuple:
         default_asked = "Where does every project stand? Every project in 1 Projects/."
     work, counts, suffix = view["work"], view["counts"], view["suffix"]
 
-    files, projects = folder.files_in_record, len(folder.projects)
-    records = (f"All {files} record files in {pr.RECORD_DIR}/, each opened" if files > 1 else
-               f"The one record file in {pr.RECORD_DIR}/, opened" if files == 1 else f"{pr.RECORD_DIR}/, which holds no record files")
-    if folder.left_out:
-        records += (f"; {folder.left_out} made after this page's as-at moment {'was' if folder.left_out == 1 else 'were'} "
-                    "left out")
-    searched = (f"{records}, with corrections and withdrawals followed to the current account; and "
-                f"{'the one project' if projects == 1 else f'the {projects} projects'} in {pr.PROJECTS_DIR}/. "
-                "This computer's copy only; no cloud copy was checked.")
-    could_not_read = ("Partial: " + " ".join(folder.problems)) if folder.problems else "Nothing: every file listed was opened."
+    searched, could_not_read = searched_lines(folder)
     title = f"{view['title']}, {short_date(folder.today)}"
     page = build_page(folder, parts, view, title, args.asked or default_asked, searched, could_not_read)
 
@@ -1212,24 +1364,22 @@ def _run(args) -> tuple:
                  for item in folder.needs_attention(work["open"])]
     two_ways = [[{"project": folder.label(item["project"]), "subject": item["subject"], "request": item["request"]}
                  for item in accounts] for accounts in work["two_ways"]]
-    zone_note = (f"Dates are compared in {folder.zone_name} time, from Pace.md." if folder.zone_name else
-                 f"Pace.md names no time zone, so today is this computer's date ({folder.now.tzname()}) and each record "
-                 "keeps the date it was written with.")
     week = {"new": len(view["week"]["new"]), "done": len(view["week"]["done"]), "cancelled": len(view["week"]["cancelled"]),
             "due_date_changed": len(view["week"]["moved"])}
     summary = {"view": kind, "as_at": long_moment(folder.now), "counts": counts, "last_7_days": week,
                "needs_attention": attention, "recorded_two_ways": two_ways, "searched": searched,
                "could_not_read": could_not_read, "complete": not folder.problems, "housekeeping": folder.notes,
-               "time_zone": folder.zone_name, "folders_without_id": folder.unlabelled}
+               "time_zone": folder.zone_name, "owner_names": sorted(folder.owner_names),
+               "folders_without_id": folder.unlabelled}
     glance = (f"{counts['open']} open: {counts['overdue']} overdue, {counts['due_today']} due today, "
               f"{counts['due_next_7_days']} due in the next {SOON_DAYS} days, {counts['waiting_on_you']} waiting on you, "
               f"{counts['waiting_on_others']} waiting on others and {counts['recorded_two_ways']} recorded two ways.")
     if not args.save:
-        return pr.result("made", f"Overview made, not saved (no --save). As at {summary['as_at']}. {glance} {zone_note}{style_note}",
+        return pr.result("made", f"Overview made, not saved (no --save). As at {summary['as_at']}. {glance}{notes}{style_note}",
                          True, page=None, **summary)
     name = f"{folder.today.isoformat()}-project-overview{suffix}"
     status, path, said = save_page(folder, name, page)
-    return pr.result(status, f"{said} As at {summary['as_at']}. {glance} {zone_note}{style_note}", status == "saved",
+    return pr.result(status, f"{said} As at {summary['as_at']}. {glance}{notes}{style_note}", status == "saved",
                      page=pr.rel(pace, path) if path else None, **summary)
 
 
@@ -1255,7 +1405,8 @@ def build_parser() -> argparse.ArgumentParser:
     view = parser.add_mutually_exclusive_group()
     view.add_argument("--project", help="one project, by its id, with the projects inside it")
     view.add_argument("--by-person", action="store_true", help="what each person owes and waits for")
-    parser.add_argument("--owner", action="append", help="the owner's name as records write it in owed-by and for; repeat for each spelling ('owner' always counts)")
+    parser.add_argument("--owner", action="append", help="another spelling of the owner's name as records write it in owed-by and for, beside the Owner: lines in Pace.md; repeat for each ('owner' always counts)")
+    parser.add_argument("--review", action="store_true", help="the Weekly review add-in's numbered list, for chat; with --project, that project and the projects inside it")
     parser.add_argument("--asked", help="the owner's question, for the page's Asked line")
     parser.add_argument("--as-at", help="the moment to make the overview for, with its offset (default: now)")
     parser.add_argument("--template", help="a customised copy of the page template (default: the shipped one)")
@@ -1273,7 +1424,7 @@ def main(argv=None) -> int:
     out, code = run(args)
     if pr.KEPT_TEMP_FILES:
         out["kept_temp_files"] = [pr.rel(Path(args.pace or "."), path) for path in pr.KEPT_TEMP_FILES]
-    print(json.dumps(out, indent=1, ensure_ascii=False))
+    pr.print_result(out)
     return code
 
 

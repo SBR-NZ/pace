@@ -10,6 +10,7 @@ When the owner asks for a daily brief, a morning catch-up or "what needs me toda
 
 - Today's date and time zone. Use the host's clock where it has one; otherwise ask.
 - Read access to `Record/` and `1 Projects/`.
+- The owner's name as the records write it, from the `Owner:` lines in `Pace.md`, so work owed by the owner is told apart from work owed by others. If there are none, ask for it and offer to add the line.
 - Optionally, the date of the last brief the owner kept, to show what changed since then.
 
 ## Steps

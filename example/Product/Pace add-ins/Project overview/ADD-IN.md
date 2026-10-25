@@ -9,7 +9,7 @@ When the owner asks for an overview, such as "where are we with the budget model
 ## What it needs
 
 - Which view: every project (the usual one), one project with the projects inside it, or by person.
-- The owner's name as the records write it in `owed-by` and `for`, such as `Daniel Kelly`. The words `owner` and `the owner` always count as the owner.
+- The owner's name as the records write it in `owed-by` and `for`, from the `Owner:` lines in `Pace.md`. If there are none, ask for it and offer to add the line. The words `owner` and `the owner` always count as the owner.
 - Today's date and time zone, from the host's clock and the `Time zone:` line in `Pace.md`.
 - Read access to `Record/`, `1 Projects/` and `Repos/`.
 - To keep the page, a way to create a new file in `2 Views/`. Replacing a file is never needed.

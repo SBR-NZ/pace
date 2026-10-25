@@ -69,7 +69,8 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(shipped, {part["id"]: part["fingerprint"] for part in parts})
         self.assertEqual(pu.assemble_pace_md(parts, shipped), TEMPLATE)  # a fresh copy is already in the written form
         self.assertEqual([part["id"] for part in parts], ["intro", "two-boundaries", "standing-instructions",
-                         "where-things-belong", "rounding-up", "add-in-index", "time-zone", "help-when-relevant"])
+                         "where-things-belong", "rounding-up", "add-in-index", "the-owner-s-name", "time-zone",
+                         "help-when-relevant"])
         # The example is a folder made from this release whose owner edited two lines of "Where things belong".
         example = (EXAMPLE / "Pace.md").read_text(encoding="utf-8")
         example_parts, example_shipped = pu.pace_md_parts(example)
@@ -96,16 +97,18 @@ class TemplateTests(unittest.TestCase):
                        "read each one back before calling it saved", "the list itself is not a record"):
             self.assertIn(phrase, section)
 
-    def test_the_owners_lines_sit_below_a_mark_in_three_parts(self):
+    def test_the_owners_lines_sit_below_a_mark_in_four_parts(self):
         for text in (TEMPLATE, (EXAMPLE / "Pace.md").read_text(encoding="utf-8")):
             lines = own_lines(text)
-            self.assertEqual(sorted(lines), ["add-in-index", "standing-instructions", "time-zone"])
+            self.assertEqual(sorted(lines), ["add-in-index", "standing-instructions", "the-owner-s-name", "time-zone"])
         lines = own_lines(TEMPLATE)
         self.assertEqual([line for line in lines["standing-instructions"] if line], ["None yet."])
         self.assertEqual([line for line in lines["add-in-index"] if line], ["None switched on yet."])
+        self.assertEqual([line for line in lines["the-owner-s-name"] if line], [])
         self.assertEqual([line for line in lines["time-zone"] if line], [])
         example = own_lines((EXAMPLE / "Pace.md").read_text(encoding="utf-8"))
         self.assertTrue(any(line.startswith("- **Daily brief**") for line in example["add-in-index"]))
+        self.assertIn("Owner: Mere Walker", example["the-owner-s-name"])
         self.assertIn("Time zone: Pacific/Auckland", example["time-zone"])
 
     def test_the_record_tool_still_finds_only_a_real_time_zone_line(self):

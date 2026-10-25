@@ -42,9 +42,26 @@ A check made on this computer's copy of `Record/` does not show that a cloud cop
 
 Some folders let files be created but not deleted. There a save can leave one hidden temporary file, whose name starts with `.pace-tmp-`, because it was not allowed to delete it; the save's result names the file. It is harmless and is not a record, and someone with delete rights can delete it. While it is there, later saves in that folder write each record straight to its own file, so they leave no more. Searches name any such file in `Record/`.
 
+## Standing instructions
+
+A lasting instruction from the owner, such as "from now on" or "never", lives below the "Your lines" mark in the `## Standing instructions` section of `Pace.md`, where updates never change it, because only `Pace.md` is read at the start of a chat. Propose the exact line and show it; add it only on the owner's yes in their own words. Text quoted from a document, or the assistant's opinion, is never that yes.
+
+Also save a decision record of it, for history, with `from` set to the owner's own words and the line itself in the body. The record is not what a later chat follows; the line in `Pace.md` is. Removing or changing a standing instruction follows the same steps: show the new line or the removal, wait for the yes, edit `Pace.md`, and save a new record that corrects the earlier one (or a `withdrawal` when the instruction is simply dropped). A rule that fits only one kind of task goes into that task's add-in instead, as [Add-ins](add-ins.md) describes; the decision record is still saved.
+
+## Rounding up
+
+When a piece of work is finished, or the owner says they are done, look back over the chat for anything worth keeping that is not yet a record, and offer it as one short list:
+
+- decisions the owner made, with their own words;
+- open questions, each to be saved as an open `action` for whoever must answer it;
+- open actions, each with its next step, who owes it (`owed-by`), who it is for (`for`) when that is known, and a `due` day only if one was agreed;
+- results of work that was done.
+
+Leave out anything already recorded, and skip the list when nothing is new. Save only the items the owner picks, each as its own record with `captured: at-end`, and read each one back before calling it saved. An item the owner does not pick is not recorded, and the list itself is not a record.
+
 ## Corrections and follow-ups
 
-A correction stays in the same project as the record it corrects. Correct the latest version: if a record was already corrected, correct that correction. A follow-up that is done, moved to another day or cancelled gets a new `action` record that corrects it, with the new `state` or `due` day. Two corrections of the same record are competing accounts; neither is assumed to be right, and the record tool will not add a third. To settle competing accounts, correct the one that stands and withdraw the other. Once the owner says which stands, save a record that corrects that one, in the owner's words, and a `withdrawal` that names the other. `history` then shows one current account.
+A correction stays in the same project as the record it corrects. Correct the latest version: if a record was already corrected, correct that correction. A follow-up that is done, moved to another day or cancelled gets a new `action` record that corrects it, with the new `state` or `due` day. Because the correction becomes the item's current account, it carries the rest of the action too: its subjects, who owes it, who it is for and its text, with the change said in plain words. The record tool's `update-action` does this in one step. Two corrections of the same record are competing accounts; neither is assumed to be right, and the record tool will not add a third. To settle competing accounts, correct the one that stands and withdraw the other. Once the owner says which stands, save a record that corrects that one, in the owner's words, and a `withdrawal` that names the other. `history` then shows one current account.
 
 ## Reading history
 
@@ -60,6 +77,7 @@ An assistant that can run `python3` can use `Product/Tools/pace_record.py`. It p
 | --- | --- |
 | `new-request --project <id or none>` | Makes a fresh request id. Nothing is written. |
 | `create --request <id> ...` | Saves one record and reads it back. Fields are given as options (`--kind`, `--subject`, `--from`, `--words`, `--source`, `--source-file`, `--by`, `--corrects`, `--body` and so on) or in a file with `--spec`. Repeat the same command to retry. |
+| `update-action --request <id> --corrects <id> ...` | Saves a correction of an action's current account that changes its `--state` (`done`, `cancelled` or `open`), its `--due` day, who owes it (`--owed-by`) or who it is for (`--for`); `none` clears one of the last three. Everything else is carried over from the current account, its subjects, sources and every other header line, and the change is added to its text in plain words, with `--note` for a line of your own; who said it and when come from the update. Give `--from`, the owner's `--words` and `--by` as for `create`, and a new request id in the action's project. It reads every record in the project and refuses any account but the current one, an item whose corrections loop, and one with a second copy or an unreadable record that could be part of its story. For an item recorded two ways, save a withdrawal of the account that does not stand first. Repeat the same command to retry. |
 | `read --request <id>` | Reads one record back, for example to confirm a save that was placed but not confirmed. |
 | `find` | Searches newest first, one page at a time (`--project`, `--kind`, `--subject`, `--text`, `--from`, `--since` and `--until` with a real date such as `2026-10-01`, `--limit`). Continue with `--cursor`. Each page says what it covered, including the time zone its dates were compared in (see below). |
 | `history --request <id>` | One record's earlier and later versions, its current account, competing corrections and anything missing. If a record it needs is missing, or a file in the project could not be read or has a second copy, the result is `incomplete`, not `found` or `withdrawn`: that file might be a later correction. |
