@@ -14,7 +14,7 @@ When the owner asks for a full list, such as "what is still outstanding?", "list
 ## Steps
 
 1. Agree the scope and, for a year list, which date decides the year.
-2. Search the whole of the relevant record. If results come back in pages, follow every page. Follow [Records and source evidence](../../Help/records.md) for what counts as a complete listing.
+2. Search the whole of the relevant record. If results come back in pages, follow every page. A year list, or one that includes done or cancelled work from more than 3 months ago, includes the year and month folders inside `Record/`, where archiving keeps finished work. Follow [Records and source evidence](../../Help/records.md) for what counts as a complete listing.
 3. If the search could not cover everything, for example a file that would not open or a listing that stopped early, say so first and present the list as partial. Never say "nothing is outstanding" after a partial search.
 4. Use each item's current state. Done, cancelled and disputed items are shown as what they are. An item recorded two different ways is shown once, with both accounts.
 5. Where a record was corrected, use its latest version. Show earlier versions only when the owner asks for the history.

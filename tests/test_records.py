@@ -1267,7 +1267,7 @@ class ExampleFolderTests(unittest.TestCase):
         for path in (EXAMPLE / "1 Projects").rglob(pr.PROJECT_FILE):
             fields, _, _ = pr.parse(path.read_bytes())
             projects[pr.one(fields, "id")] = pr.parse_time(pr.one(fields, "created"))
-        records = sorted((EXAMPLE / "Record").glob("*.md"))
+        records = sorted((EXAMPLE / "Record").rglob("*.md"))  # archived records too
         self.assertTrue(records)
         for path in records:
             with self.subTest(record=path.name):
@@ -1275,7 +1275,8 @@ class ExampleFolderTests(unittest.TestCase):
                 self.assertEqual(problems + pr.record_problems(fields, body, path.stem), [])
                 created = pr.parse_time(pr.one(fields, "created"))
                 self.assertGreaterEqual(created, pr.request_time(path.stem))
-                self.assertLessEqual(projects[pr.one(fields, "project")], created)
+                if pr.one(fields, "project") != pr.NO_PROJECT:
+                    self.assertLessEqual(projects[pr.one(fields, "project")], created)
 
 
     def test_file_sources_carry_their_fingerprint(self):

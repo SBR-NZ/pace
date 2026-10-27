@@ -4,7 +4,7 @@ The record is the owner's history: decisions, actions, notes and figures kept as
 
 ## A record is never edited
 
-Each record is **one new file**. A saved record is never edited, renamed or replaced. To fix one, save a new record that names it in `corrects`; the earlier one stays readable as history. To say one no longer stands, save a `withdrawal` that names it. Pace never deletes a record. If the owner removes a file themselves, anything that pointed to it is reported as missing.
+Each record is **one new file**. A saved record is never edited, renamed or replaced, and only archiving ever moves one, unchanged and under its own name, as Archiving finished work, below, describes. To fix one, save a new record that names it in `corrects`; the earlier one stays readable as history. To say one no longer stands, save a `withdrawal` that names it. Pace never deletes a record. If the owner removes a file themselves, anything that pointed to it is reported as missing.
 
 ## What is worth keeping
 
@@ -67,7 +67,7 @@ A correction stays in the same project as the record it corrects. Correct the la
 
 Search in place and read only what the question needs. Narrow by project and dates first; record names show both without opening a file. Follow corrections to the latest version, and show the earlier ones only when the history matters.
 
-Always say what the search covered. Show competing accounts side by side. Name anything missing (a record pointed to but not found), unreadable, or present twice. Never say a list is complete after reading only part of `Record/`. A question that truly needs completeness, such as "everything recorded this year", needs every page read; to show nothing has gone missing since an earlier date, compare with a listing kept from that date. Download or copy only files the task really has to work on. A dated page or list made from records is a view, not another record.
+Always say what the search covered. Show competing accounts side by side. Name anything missing (a record pointed to but not found), unreadable, or present twice. Never say a list is complete after reading only part of `Record/`. Finished work from more than 3 months ago may be archived in the year and month folders inside `Record/`, so a question that reaches back that far, or that is about finished work, needs those folders too. A question that truly needs completeness, such as "everything recorded this year", needs every page read; to show nothing has gone missing since an earlier date, compare with a listing kept from that date. Download or copy only files the task really has to work on. A dated page or list made from records is a view, not another record.
 
 ## The record tool
 
@@ -81,11 +81,33 @@ An assistant that can run `python3` can use `Product/Tools/pace_record.py`. It p
 | `read --request <id>` | Reads one record back, for example to confirm a save that was placed but not confirmed. |
 | `find` | Searches newest first, one page at a time (`--project`, `--kind`, `--subject`, `--text`, `--from`, `--since` and `--until` with a real date such as `2026-10-01`, `--limit`). Continue with `--cursor`. Each page says what it covered, including the time zone its dates were compared in (see below). |
 | `history --request <id>` | One record's earlier and later versions, its current account, competing corrections and anything missing. If a record it needs is missing, or a file in the project could not be read or has a second copy, the result is `incomplete`, not `found` or `withdrawn`: that file might be a later correction. |
-| `listing` | Lists the names in `Record/` (`--digests` adds each file's fingerprint). `--save` keeps a listing with every file's fingerprint outside `Record/`, and `--compare` checks a kept listing for missing or changed files. A kept listing with no fingerprints, made by an earlier version of the tool, can show only what is missing: its result is `unchecked`, never `matches`. |
+| `listing` | Lists the names in `Record/` and its year and month folders (`--digests` adds each file's fingerprint). `--save` keeps a listing with every file's fingerprint outside `Record/`, and `--compare` checks a kept listing for missing or changed files, matching each file by its name, so a record archived since is still the same file. A kept listing with no fingerprints, made by an earlier version of the tool, can show only what is missing: its result is `unchecked`, never `matches`. |
 | `project-new`, `projects` | Create a project with its id, and list projects. See [Projects and repository references](projects.md). |
 | `propose`, `confirm`, `confirmation-status`, `approval-reference` | Show and fingerprint an exact act, record current owner words, check the content and corrections, or keep a separate client-supplied decision reference. See [Exact-act confirmations](confirmations.md). |
 
 **Dates and the owner's time zone.** A record's `created` time is written with the offset of the computer that saved it, and a cloud assistant usually runs on UTC: 9 am on 23 October in Auckland is written as 22 October in UTC. To have `--since` and `--until` compare dates in the owner's time zone, add one line to `Pace.md` naming it, such as `Time zone: Pacific/Auckland`. Each record's moment is then turned into that zone's date; no record is rewritten. With no such line, each record's own written date is used, and the search says so. If the named zone cannot be used here (an unknown name, Python 3.8, or Windows without Python's `tzdata` package), a date search stops and says so rather than guess.
+
+## Archiving finished work
+
+`Record/` keeps growing, and OneDrive's web pages and a OneDrive connection get slow as a folder nears 5,000 items. Archiving moves finished work out of the way, into a folder inside `Record/` for the year and month in each record's request id, such as `Record/2026/07/` for `20260715T221500Z--kowhai-budget--k3f9q2`. Each record keeps its name and every byte, so it can always be found from its request id.
+
+- **What moves:** the whole story of an item, its first record and every correction, once its work is finished and every record in it is more than 3 months old. Finished means its current account is an action done or cancelled, a withdrawal, or any other kind of record but a project change, such as a decision, a note, a result, a figure or a confirmation.
+- **What stays directly in `Record/`:** open work, work recorded two ways, project changes, which hold each project's owner, target and status, and everything from the last 3 months. So open work and each project's current state can always be read from `Record/` itself. A story that is not settled stays too: one with a missing record or a record that cannot be relied on, corrections that loop, or in a project with a record that cannot be read or a second copy. Nothing moves at all while a folder inside `Record/` could not be read or was not made by archiving.
+- **New records are always saved directly in `Record/`**, a correction of an archived record too. Only archiving moves a record; never move one by hand, except to put right what the health check finds out of place, on the owner's yes and changing nothing in the file.
+- **The owner decides.** The health check and the weekly review say when archiving is worth it: once `Record/` itself holds 2,000 records and at least 500 could move. Nothing moves until the owner has seen what would move and said yes in their own words.
+
+An assistant that can run Python 3.9 or later archives with `Product/Tools/pace_archive.py`, from the Pace folder:
+
+```text
+python3 Product/Tools/pace_archive.py preview
+python3 Product/Tools/pace_archive.py apply --plan <plan from preview> --go-ahead "<the owner's words>" --by "<assistant>"
+```
+
+`preview` changes nothing. It says how many records would move and into which folders, how many items stay and why, and gives a `plan`. Show the owner what it says. `apply` moves exactly that plan, and only with the owner's go-ahead, given after they saw it. If what would move has changed since the preview, for example because a record was saved or corrected, or more work has become ready, it moves nothing and says to preview again. It moves the oldest first, as many as the record of the archive can list: up to 1,500 records, and down to about 850 when project ids are as long as they can be. It says when more are ready, and a story too long for one archive's record stays in `Record/`.
+
+Before it moves anything, the tool saves a record of the archive and reads it back: a note from the owner, with their words, that lists every record it is moving under its month folder, with a digest for each folder. Then each record is moved, never copied or rewritten and never over a file already there, and checked to read back the same in its new place. `status` is `archived` only when every record moved and passed the check. If it stops part-way, every record is still whole and in one place, in its month folder or directly in `Record/`, and the result says what moved; preview again for the rest. The health check uses the record of each archive to check that every record it lists is in its month folder and unchanged, or still directly in `Record/` when the archive stopped before moving it, and it names any record in a month folder that no archive lists.
+
+An assistant that cannot run the tool, such as one working through a OneDrive connection, never archives. [Record format: record-1](record-format.md) says how to read archived records by hand.
 
 ## Exact-act confirmations
 

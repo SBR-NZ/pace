@@ -523,6 +523,26 @@ def _has_content(folder: Path) -> bool:
         return True
 
 
+# From 3.14.0 the record tool reads records that archiving moved into Record/'s year and month folders.
+ARCHIVE_READER = b"def archive_folder("
+
+
+def archive_stop(root: Path, release: dict) -> str:
+    """Why this release cannot be installed here, or "": one whose tools cannot read archived records would miss them."""
+    record = root / "Record"
+    try:
+        with os.scandir(record) as entries:
+            years = [entry.name for entry in entries if entry.is_dir() and re.fullmatch(r"\d{4}", entry.name)]
+    except OSError:
+        return ""
+    if not any(_has_content(record / year) for year in years):
+        return ""
+    if ARCHIVE_READER in (release.get("files") or {}).get("Tools/pace_record.py", b""):
+        return ""
+    return (f"This Pace folder has records archived in Record/'s year and month folders, which Pace {release['tag']} "
+            "cannot read, so its tools would miss them. Install Pace 3.14.0 or later instead.")
+
+
 def folder_renames(root: Path, release: dict) -> list:
     """The owner's folders to sort out before this release is installed, each as {"from", "to", "do"}.
 
@@ -1375,6 +1395,10 @@ def preview(root, repo: str, tag: str, commit: str | None = None, *, upstream: d
     result["message"] = "This is a preview. Nothing has been installed or recorded."
     renames = folder_renames(folder, release)
     lines = old_folder_lines(folder, plan)
+    archive = archive_stop(folder, release)
+    if archive:
+        result["status"] = "cannot install"
+        result["message"] += " " + archive
     if renames:
         result["folders_to_rename"] = renames
         result["message"] += " " + renames_message(renames, lines) + " The install stops until then."
@@ -1417,6 +1441,9 @@ def prepare(root, repo: str, tag: str, commit: str, *, upstream: dict | None = N
     if not (folder / "Pace.md").is_file():
         raise Stop("A local proposal needs a person's Pace.md; central copies use IT change control.")
     plan = _plan(folder, repo, tag, check_commit_id(commit), upstream, expect_digest)
+    archive = archive_stop(folder, plan["release"])
+    if archive:
+        raise Stop(archive + " No proposal was saved.")
     renames = folder_renames(folder, plan["release"])
     if renames:
         raise Stop(renames_message(renames, old_folder_lines(folder, plan)) + " No proposal was saved.")
@@ -1439,7 +1466,9 @@ def _check_confirmation(root: Path, request: str, expected: bytes) -> str:
     spec.loader.exec_module(record)
     if not record.REQUEST.fullmatch(request or ""):
         raise Stop("Give a valid exact-act confirmation request id from Record/.")
-    item = record.load(root / "Record", f"{request}.md")
+    reader = getattr(record, "record_name", None)  # finds a confirmation archived into its month folder
+    name = reader(root / "Record", request) if reader else f"{request}.md"
+    item = record.load(root / "Record", name)
     fields = item.get("fields") or {}
     if item["state"] != "readable" or record.one(fields, "kind") != "confirmation":
         raise Stop("The exact-act confirmation is not a readable confirmation record in Record/.")
@@ -1452,7 +1481,7 @@ def _check_confirmation(root: Path, request: str, expected: bytes) -> str:
         raise Stop(f"The exact-act confirmation is not current: {state['message']}")
     if act_path.read_bytes() != expected:
         raise Stop("The confirmed proposal does not match this install's source, destination or before-and-after. Prepare a new proposal and ask the owner again.")
-    return f"Record/{request}.md"
+    return f"Record/{name}"
 
 
 def _names_release(words: str, tag: str, commit: str) -> bool:
@@ -1821,6 +1850,9 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
 
     plan = _plan(folder, repo, tag, commit, upstream, expect_digest)
     release = plan["release"]
+    archive = archive_stop(folder, release)
+    if archive:
+        raise Stop(archive + " Nothing was installed.")
     renames = folder_renames(folder, release)
     if renames:
         raise Stop(renames_message(renames, old_folder_lines(folder, plan)) + " Nothing was installed.")

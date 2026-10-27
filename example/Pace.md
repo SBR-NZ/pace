@@ -21,7 +21,7 @@ The numbered folders are the ones people open, so they sort above Pace's other f
 - `1 Projects/` - projects, each with its files in `Documents/`. In `Documents/`, each piece of work has one working file, under the same name at the top of its folder; when a version is sent, presented, filed or signed off, keep a dated copy in `Archive/` beside it. The detail is in [Documents and versions](Product/Help/projects.md#documents-and-versions).
 - `2 Views/` - dated pages made from the records, such as the project overview; snapshots, never a second record.
 - `3 My add-ins/` - owner-made or customised add-ins (separate from Product), and `Assistant setup.md`, which says what each of the owner's assistants can reach. Read it when choosing which assistant or connection suits a task.
-- `Record/` - the owner's memory: decisions, actions, notes and figures. When the owner asks what you remember or have in memory, search here, not the assistant's own memory feature.
+- `Record/` - the owner's memory: decisions, actions, notes and figures. Open work, project changes and the last 3 months are always directly in it; finished work from before then may be archived in its year and month folders, such as `Record/2026/07/`. When the owner asks what you remember or have in memory, search here, not the assistant's own memory feature.
 - `Repos/` - repository references, mirroring each project's place in `1 Projects/`.
 - `Product/` - versioned help and shipped add-ins in `Product/Pace add-ins/`. Pace's own; updates replace it.
 - `Release record/` - where releases come from, the installed release and install receipts, outside Product (this copy holds an invented release record).
@@ -60,4 +60,4 @@ Time zone: Pacific/Auckland
 - [Product updates](Product/Help/updates.md) - to check for an update, read `Release record/Installed release.md`, then preview the newest release; installing needs the owner's go-ahead.
 - [Assistants and dated views](Product/Help/hosts-and-views.md) - what hosts can actually do, the steps for an assistant that reaches this folder only through a OneDrive connection, the owner's assistant setup and optional pages over records.
 - [Health check](Product/Help/health-check.md) - one read-only check of the whole Pace folder, with what to do about anything it finds.
-<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=7d526bb47ceb rounding-up=338f8a57f6ab add-in-index=bd574ef05183 the-owner-s-name=cfc223e0a7d6 time-zone=01475f79d218 help-when-relevant=952dce37ec53 -->
+<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=42ff4b6c5b38 rounding-up=338f8a57f6ab add-in-index=bd574ef05183 the-owner-s-name=cfc223e0a7d6 time-zone=01475f79d218 help-when-relevant=952dce37ec53 -->

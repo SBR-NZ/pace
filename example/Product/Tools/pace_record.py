@@ -86,6 +86,10 @@ RECORD_ORDER = (
 PROJECT_ORDER = ("format", "id", "parent", "created", "by")
 IGNORED_NAMES = {".gitkeep", "desktop.ini", ".ds_store", "thumbs.db"}
 TEMP_PREFIX = ".pace-tmp-"
+# Archiving moves finished work, unchanged and under the same name, into the folder for the year and month in its
+# request id, such as Record/2026/07/. Nothing else ever moves a record, and every new record is saved directly in Record/.
+YEAR_FOLDER = re.compile(r"^\d{4}$")
+MONTH_FOLDER = re.compile(r"^(?:0[1-9]|1[0-2])$")
 UTC = dt.timezone.utc
 ALPHABET = string.ascii_lowercase + string.digits
 
@@ -131,6 +135,17 @@ def parse_date(text: str):
 def request_time(request: str) -> dt.datetime:
     match = REQUEST.match(request) or REQUEST_START.match(request)
     return dt.datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+
+
+def is_request(text) -> bool:
+    """A request id whose time is a real date and time, such as 20261022T221500Z, never 20260931T221500Z."""
+    if not REQUEST.match(text or ""):
+        return False
+    try:
+        request_time(text)
+    except ValueError:
+        return False
+    return True
 
 
 def local_text(moment: dt.datetime) -> str:
@@ -259,6 +274,8 @@ def record_problems(fields: dict, body: str, stem: str | None = None) -> list:
     match = REQUEST.match(request)
     if not match:
         out.append("request is missing or not in the form <time>--<project>--<6 letters or digits>")
+    elif not is_request(request):
+        out.append("the time in request is not a real date and time")
     elif stem is not None and request != stem:
         out.append(f"request {request!r} does not match the file name {stem!r}")
     created = one(fields, "created")
@@ -296,7 +313,7 @@ def record_problems(fields: dict, body: str, stem: str | None = None) -> list:
     corrects = one(fields, "corrects")
     if corrects:
         corrected = REQUEST.match(corrects)
-        if not corrected:
+        if not corrected or not is_request(corrects):
             out.append("corrects is not a request id")
         elif corrects == request:
             out.append("a record cannot correct itself")
@@ -547,53 +564,158 @@ def rel(pace: Path, path: Path) -> str:
 
 # ---------------------------------------------------------------- listing Record/
 
-def scan_record_names(record_dir: Path):
-    """List Record/ by name only (no file is opened).
+# The updater looks for this definition to tell that a release reads archived records: keep its name.
+def archive_folder(request: str) -> str:
+    """The folder inside Record/ that archiving moves a record to: the year and month in its request id, such as 2026/07."""
+    stamp = (REQUEST.match(request) or REQUEST_START.match(request)).group(1)
+    return f"{stamp[:4]}/{stamp[4:6]}"
 
-    Returns (records, copies, issues): records maps request -> file name,
-    copies is a list of (request, file name) for conflict copies.
+
+def base_name(name: str) -> str:
+    """A record's own file name, without the year and month folders an archived record sits in."""
+    return name.rsplit("/", 1)[-1]
+
+
+def record_name(record_dir: Path, request: str) -> str:
+    """Where a record is, as a name inside Record/: directly in it, or in its month folder once archived. A record in
+    neither place gets the name directly in Record/, which is where a new record is saved."""
+    flat = f"{request}.md"
+    try:
+        if (record_dir / flat).exists():
+            return flat
+    except OSError:
+        return flat  # opening it then says why it cannot be opened
+    archived = f"{archive_folder(request)}/{flat}"
+    try:
+        return archived if (record_dir / archived).exists() else flat
+    except OSError:
+        return archived
+
+
+def _listing(folder: Path) -> list:
+    with os.scandir(folder) as entries:
+        return sorted(entries, key=lambda entry: entry.name)
+
+
+def _record_file(name: str, place: str, records: dict, copies: list, issues: list) -> None:
+    """Sort one file found in Record/ (place "") or in one of its month folders (place "2026/07/")."""
+    where = f"Record/{place}{name}"
+    if name.startswith(TEMP_PREFIX):
+        issues.append({"type": "unfinished-save", "file": place + name,
+                       "message": (f"{where} is not a record: it is a temporary file from a save that is in progress, "
+                                   f"was interrupted, or was not allowed to delete it. {TEMP_NOTE}")})
+        return
+    stem, ext = os.path.splitext(name)
+    if ext != ".md":
+        issues.append({"type": "unrecognised-file", "file": place + name,
+                       "message": f"{where} is not a record file and was not read."})
+        return
+    start = REQUEST.match(stem) or REQUEST_START.match(stem)
+    if start and not is_request(start.group(0)):
+        issues.append({"type": "misnamed-record", "file": place + name, "request": start.group(0),
+                       "message": f"{where} has a request id whose time is not a real date and time, so it was not read."})
+        return
+    if start and place and f"{archive_folder(stem)}/" != place:
+        issues.append({"type": "misplaced-record", "file": place + name, "request": start.group(0),
+                       "message": (f"{where} is not in the folder for the year and month in its request id, "
+                                   f"Record/{archive_folder(stem)}/, so it was not read.")})
+        return
+    if REQUEST.match(stem):
+        if stem in records:  # also directly in Record/: one record in two places
+            copies.append((stem, place + name))
+        else:
+            records[stem] = place + name
+    elif start:
+        copies.append((start.group(0), place + name))
+    else:
+        issues.append({"type": "unrecognised-file", "file": place + name,
+                       "message": f"{where} does not have a record name and was not read."})
+
+
+def scan_record_names(record_dir: Path):
+    """List Record/ and the year and month folders archiving makes in it, by name only (no file is opened).
+
+    Returns (records, copies, issues): records maps request -> its name inside Record/, which is "<request>.md"
+    or, once archived, "2026/07/<request>.md"; copies is a list of (request, name) for second copies, including a
+    record found both directly in Record/ and in its month folder.
     """
     records, copies, issues = {}, [], []
-    for entry in os.scandir(record_dir):
+    years = []
+    for entry in _listing(record_dir):
         name = entry.name
         if name.lower() in IGNORED_NAMES:
             continue
         if entry.is_dir():
-            issues.append({"type": "unexpected-folder", "file": name,
-                           "message": f"Record/{name} is a folder; records are files directly in Record/ and this folder was not read."})
+            if YEAR_FOLDER.match(name):
+                years.append(name)
+            else:
+                issues.append({"type": "unexpected-folder", "file": name,
+                               "message": (f"Record/{name} is a folder that is not a year folder from archiving; records "
+                                           "are files directly in Record/ or in its year and month folders, and this "
+                                           "folder was not read.")})
             continue
-        if name.startswith(TEMP_PREFIX):
-            issues.append({"type": "unfinished-save", "file": name,
-                           "message": (f"Record/{name} is not a record: it is a temporary file from a save that is in progress, "
-                                       f"was interrupted, or was not allowed to delete it. {TEMP_NOTE}")})
-            continue
-        stem, ext = os.path.splitext(name)
-        if ext != ".md":
-            issues.append({"type": "unrecognised-file", "file": name,
-                           "message": f"Record/{name} is not a record file and was not read."})
-            continue
-        if REQUEST.match(stem):
-            records[stem] = name
-            continue
-        start = REQUEST_START.match(stem)
-        if start:
-            copies.append((start.group(0), name))
-            continue
-        issues.append({"type": "unrecognised-file", "file": name,
-                       "message": f"Record/{name} does not have a record name and was not read."})
+        _record_file(name, "", records, copies, issues)
+    def listed(place: str) -> list:
+        """A year or month folder's entries; one that cannot be listed is named, never taken as empty."""
+        try:
+            return _listing(record_dir / place)
+        except OSError as error:
+            issues.append({"type": "unreadable", "file": f"{place}/",
+                           "message": (f"Record/{place}/ could not be listed ({error}), so the archived records in it "
+                                       "were not read.")})
+            return []
+
+    for year in years:
+        for entry in listed(year):
+            name = entry.name
+            if name.lower() in IGNORED_NAMES:
+                continue
+            if not entry.is_dir():
+                _record_file(name, f"{year}/", records, copies, issues)
+            elif not MONTH_FOLDER.match(name):
+                issues.append({"type": "unexpected-folder", "file": f"{year}/{name}",
+                               "message": (f"Record/{year}/{name} is a folder that is not a month folder from archiving, "
+                                           "such as 07, so it was not read.")})
+            else:
+                for inner in listed(f"{year}/{name}"):
+                    if inner.name.lower() in IGNORED_NAMES:
+                        continue
+                    if inner.is_dir():
+                        issues.append({"type": "unexpected-folder", "file": f"{year}/{name}/{inner.name}",
+                                       "message": (f"Record/{year}/{name}/{inner.name} is a folder inside a month folder, "
+                                                   "where archiving puts only records, so it was not read.")})
+                    else:
+                        _record_file(inner.name, f"{year}/{name}/", records, copies, issues)
     return records, copies, issues
 
 
 def copy_issue(request: str, name: str) -> dict:
-    return {"type": "conflict-copy", "file": name, "request": request,
-            "message": (f"Record/{name} looks like a second copy of record {request} (for example a sync "
-                        "conflict copy). Neither copy is assumed right; compare them and ask the owner.")}
+    if base_name(name) == f"{request}.md":
+        message = (f"Record/{name} and Record/{request}.md are one record in two places, for example from an archive "
+                   "that did not finish. Neither copy is assumed right; compare them and ask the owner.")
+    else:
+        message = (f"Record/{name} looks like a second copy of record {request} (for example a sync "
+                   "conflict copy). Neither copy is assumed right; compare them and ask the owner.")
+    return {"type": "conflict-copy", "file": name, "request": request, "message": message}
+
+
+# Scan issues that leave part of Record/ unread: a folder that could not be listed, a folder archiving did not make, a
+# record out of its month folder, and a record whose request id's time is not a real one. What was not read could be any
+# record, so an answer that depends on it is not settled.
+NOT_READ = ("unreadable", "unexpected-folder", "misplaced-record", "misnamed-record")
+
+
+def unread_parts(issues: list, project: str | None = None) -> list:
+    """The issues that leave something unread that could be a record of this project (of any project with None). A record
+    out of its month folder, or misnamed, belongs to the project in its name; a folder could hold any project's."""
+    return [issue for issue in issues if issue.get("type") in NOT_READ and (
+        project is None or not issue.get("request") or REQUEST_START.match(issue["request"]).group(2) == project)]
 
 
 def load(record_dir: Path, name: str):
-    """Open one record file. Returns a dict describing what was found."""
+    """Open one record file, by its name inside Record/. Returns a dict describing what was found."""
     path = record_dir / name
-    stem = os.path.splitext(name)[0]
+    stem = os.path.splitext(base_name(name))[0]
     try:
         data = read_back(path)
     except FileNotFoundError:
@@ -628,7 +750,7 @@ def summary(item: dict, full: bool) -> dict:
     fields = item.get("fields") or {}
     body = item.get("body") or ""
     out = {
-        "request": os.path.splitext(item["file"])[0],
+        "request": os.path.splitext(base_name(item["file"]))[0],
         "file": f"{RECORD_DIR}/{item['file']}",
         "created": one(fields, "created"),
         "project": one(fields, "project"),
@@ -983,7 +1105,7 @@ def corrections_of(record_dir: Path, request: str, project: str, all_projects=Fa
         if corrects:
             by_predecessor.setdefault(corrects, []).append(stem)
     for request_id, name in copies:
-        if all_projects or REQUEST_START.match(name).group(2) == project:
+        if all_projects or REQUEST_START.match(base_name(name)).group(2) == project:
             issues.append(copy_issue(request_id, name))
     return by_predecessor, opened, issues
 
@@ -1018,7 +1140,7 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
     record_dir = pace / RECORD_DIR
     fields["format"] = [RECORD_FORMAT]
     request = one(fields, "request")
-    if not REQUEST.match(request):
+    if not is_request(request):
         return result("not-saved", "Not saved: a request id is needed first (use new-request), so a retry can be recognised.", False)
     if "created" not in fields:
         fields["created"] = [local_text(request_time(request))]
@@ -1046,7 +1168,9 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
     path = record_dir / f"{request}.md"
     file_rel = f"{RECORD_DIR}/{request}.md"
 
-    def existing_outcome(retries: int = 3) -> tuple:
+    def existing_outcome(retries: int = 3, name: str = f"{request}.md") -> tuple:
+        # A retry can find the record in its month folder, when it was saved and has since been archived.
+        path, file_rel = record_dir / name, f"{RECORD_DIR}/{name}"
         differ = None
         for attempt in range(retries):
             try:
@@ -1068,12 +1192,18 @@ def save_record(pace: Path, args, fields: dict, body: str) -> tuple:
                        "if it fixes the saved one, save a new record that corrects it."),
                       False, request=request, file=file_rel, differs=differ)
 
-    if path.exists():
-        return existing_outcome()
+    where = record_name(record_dir, request)
+    try:
+        present = (record_dir / where).exists()
+    except OSError as error:
+        return result("not-saved", f"Not saved: {RECORD_DIR}/{where} could not be checked ({error}). Nothing was written.",
+                      False, request=request)
+    if present:
+        return existing_outcome(name=where)
 
     corrects = one(fields, "corrects")
     if corrects:
-        before = load(record_dir, f"{corrects}.md")
+        before = load(record_dir, record_name(record_dir, corrects))
         if before["state"] == "missing":
             return result("not-saved", f"Not saved: the record it corrects ({corrects}) was not found in {RECORD_DIR}/ here.", False, request=request)
         if before["state"] not in ("readable", "invalid"):
@@ -1138,11 +1268,11 @@ def cmd_read(args) -> tuple:
     pace = pace_folder(args.pace)
     record_dir = pace / RECORD_DIR
     request = args.request
-    if not REQUEST.match(request or ""):
+    if not is_request(request):
         return result("not-read", "That is not a request id.", False)
     if not record_dir.is_dir():
         return result("not-read", f"{RECORD_DIR}/ was not found in {pace}. Check the Pace folder and that it is available here.", False)
-    item = load(record_dir, f"{request}.md")
+    item = load(record_dir, record_name(record_dir, request))
     copies = []
     if record_dir.is_dir():
         _, all_copies, _ = scan_record_names(record_dir)
@@ -1214,7 +1344,7 @@ def cmd_find(args) -> tuple:
             zone_name, args.zone = owner_time_zone(pace)
         except ValueError as error:
             return result("not-read", f"Could not use your time zone: {error}. No dates were compared, and no time zone was guessed.", False)
-    if args.cursor and not REQUEST.match(args.cursor):
+    if args.cursor and not is_request(args.cursor):
         return result("not-read", "That cursor is not one this tool gave out.", False)
     names, copies, issues = scan_record_names(record_dir)
     candidates = sorted((stem for stem in names if name_filter(stem, args)), reverse=True)
@@ -1266,6 +1396,7 @@ def cmd_find(args) -> tuple:
             content_issues.append(copy_issue(request_id, name))
     next_cursor = stopped_at
     problems = [i for i in content_issues if i["type"] in ("damaged", "unreadable", "vanished", "newer-format", "conflict-copy")]
+    problems += unread_parts(issues, args.project)  # anything in Record/ that was not read may hide a match
     scope = describe_scope(args)
     if next_cursor:
         coverage = (f"Partial: checked {opened} of {len(candidates)} record files {scope}, newest first. "
@@ -1304,9 +1435,9 @@ def cmd_history(args) -> tuple:
     pace = pace_folder(args.pace)
     record_dir = pace / RECORD_DIR
     request = args.request
-    if not REQUEST.match(request or ""):
+    if not is_request(request):
         return result("not-read", "That is not a request id.", False)
-    start = load(record_dir, f"{request}.md")
+    start = load(record_dir, record_name(record_dir, request))
     if start["state"] == "missing":
         return result("not-found", f"No file for {request} in {RECORD_DIR}/ as it can be seen here now. It may not have arrived on this computer, or it may have been moved or removed.", False, request=request)
     if start["state"] not in ("readable", "invalid"):
@@ -1322,7 +1453,13 @@ def cmd_history(args) -> tuple:
             issues.append({"type": "loop", "message": f"The corrections loop back to {before}."})
             break
         seen.add(before)
-        item = load(record_dir, f"{before}.md")
+        if not is_request(before):
+            missing.append(before)
+            issues.append({"type": "missing", "request": before,
+                           "message": f"{root} corrects {before!r}, which is not a request id, so the record it means "
+                                      "cannot be found."})
+            break
+        item = load(record_dir, record_name(record_dir, before))
         if item["state"] == "missing":
             missing.append(before)
             issues.append({"type": "missing", "request": before,
@@ -1348,7 +1485,7 @@ def cmd_history(args) -> tuple:
         tree[node] = children
         for child in children:
             if child not in records:
-                item = load(record_dir, f"{child}.md")
+                item = load(record_dir, record_name(record_dir, child))
                 if item["state"] in ("readable", "invalid"):
                     records[child] = item
             if child not in tree:
@@ -1378,6 +1515,7 @@ def cmd_history(args) -> tuple:
                 f"{root} on, as visible here. A correction not yet on this computer would not be seen.")
     # A file that could not be relied on might itself be a correction, so nothing is settled.
     unreliable = [i for i in issues if i["type"] in ("damaged", "unreadable", "newer-format", "conflict-copy", "loop")]
+    unreliable += [i for i in unread_parts(issues, None if args.all_projects else project) if i not in unreliable]
     if missing or unreliable:
         coverage += " Some material is missing or unreliable (see issues), so this history is incomplete."
     if len(current) > 1:
@@ -1410,8 +1548,10 @@ def item_story(record_dir: Path, request: str, project: str) -> dict:
     Returns its records ("members"), the accounts that stand now ("current"), whether its corrections loop, and the
     files that could belong to it but cannot be relied on: a second copy of one of its records, or a record in the
     project that cannot be read. A missing earlier record hides no later account, so it stops nothing here."""
-    names, copies, _ = scan_record_names(record_dir)
+    names, copies, issues = scan_record_names(record_dir)
     fields_of, unreliable = {}, []
+    for issue in unread_parts(issues, project):  # a folder or file that was not read could hold part of the story
+        unreliable.append(f"{RECORD_DIR}/{issue['file']}" + ("/" if issue["type"] == "unexpected-folder" else ""))
     for stem, name in sorted(names.items()):
         if REQUEST.match(stem).group(2) != project:
             continue
@@ -1482,14 +1622,14 @@ def cmd_update_action(args) -> tuple:
     args.pace_path = pace
     record_dir = pace / RECORD_DIR
     earlier = args.corrects or ""
-    if not REQUEST.match(earlier):
+    if not is_request(earlier):
         return result("not-saved", "Not saved: --corrects needs the request id of the action's current account.", False)
-    if not REQUEST.match(args.request or ""):
+    if not is_request(args.request):
         return result("not-saved", "Not saved: a request id is needed first (use new-request with the action's project), "
                       "so a retry can be recognised.", False)
     if not record_dir.is_dir():
         return result("not-saved", f"Not saved: {RECORD_DIR}/ was not found in {pace}. Check the Pace folder and that it is available here.", False)
-    before = load(record_dir, f"{earlier}.md")
+    before = load(record_dir, record_name(record_dir, earlier))
     if before["state"] == "missing":
         return result("not-saved", f"Not saved: {earlier} was not found in {RECORD_DIR}/ here.", False, request=args.request)
     if before["state"] != "readable":
@@ -1534,8 +1674,12 @@ def cmd_update_action(args) -> tuple:
         body = tidy_body(args.body)
     else:
         body = tidy_body("\n\n".join(part for part in (before["body"], " ".join(sentences), args.note or "") if part.strip()))
-    path = record_dir / f"{args.request}.md"
-    if not path.exists():
+    try:
+        saved_before = (record_dir / record_name(record_dir, args.request)).exists()
+    except OSError as error:
+        return result("not-saved", f"Not saved: {RECORD_DIR}/ could not be checked for {args.request} ({error}).", False,
+                      request=args.request)
+    if not saved_before:
         # Only the current account can be corrected, and never while it is recorded two ways.
         story = item_story(record_dir, earlier, project)
         current = story["current"]
@@ -1587,12 +1731,17 @@ def cmd_listing(args) -> tuple:
     listing = {"format": "record-listing-1", "made": local_text(now_utc()), "files": files}
     if args.compare:
         earlier = json.loads(Path(args.compare).read_text(encoding="utf-8"))
-        old = earlier.get("files") or {}
-        gone = sorted(set(old) - set(files))
-        new = sorted(set(files) - set(old))
-        changed = sorted(n for n in set(old) & set(files)
-                         if old[n].get("sha256") and old[n].get("sha256") != files[n].get("sha256"))
-        unchecked = sorted(n for n in set(old) & set(files) if not old[n].get("sha256"))
+        # Files are matched by their own name, so a record archived since the earlier listing is still the same file.
+        before = {base_name(name): name for name in earlier.get("files") or {}}
+        old = {base_name(name): entry for name, entry in (earlier.get("files") or {}).items()}
+        now = {base_name(name): name for name in files}
+        files_by = {base_name(name): entry for name, entry in files.items()}
+        gone = sorted(set(old) - set(files_by))
+        new = sorted(set(files_by) - set(old))
+        changed = sorted(n for n in set(old) & set(files_by)
+                         if old[n].get("sha256") and old[n].get("sha256") != files_by[n].get("sha256"))
+        unchecked = sorted(n for n in set(old) & set(files_by) if not old[n].get("sha256"))
+        archived = sorted(n for n in set(old) & set(files_by) if before[n] != now[n])
         parts = []
         if gone:
             parts.append(f"{len(gone)} file(s) in the earlier listing are not here now (removed, moved or not on this computer)")
@@ -1611,8 +1760,10 @@ def cmd_listing(args) -> tuple:
                         "not whether they changed. Save a new listing to check for changes from now on.")
         if new:
             message += f" {len(new)} file(s) are new since then."
+        if archived:
+            message += f" {len(archived)} file(s) are now in their year and month folders, moved there by archiving."
         return result(status, message, status == "matches", missing=gone, changed=changed, new=new,
-                      unchecked=unchecked, issues=issues + [copy_issue(r, n) for r, n in copies])
+                      unchecked=unchecked, archived=archived, issues=issues + [copy_issue(r, n) for r, n in copies])
     if args.save:
         target = Path(args.save).expanduser().resolve()
         if record_dir.resolve() in target.parents:
@@ -1766,12 +1917,12 @@ def cmd_confirm(args) -> tuple:
 
 
 def confirmation_state(pace: Path, request: str, path: str | None = None) -> tuple:
-    if not REQUEST.match(request or ""):
+    if not is_request(request):
         return result("pending", "Not a record request id.", False)
     record_dir = pace / RECORD_DIR
     if not record_dir.is_dir():
         return result("pending", "Record/ is not available for read-back.", False)
-    item = load(record_dir, f"{request}.md")
+    item = load(record_dir, record_name(record_dir, request))
     if item["state"] != "readable" or one(item.get("fields") or {}, "kind") != "confirmation":
         return result("pending", "No readable exact-act confirmation record for this request. A create receipt alone is not confirmation.", False)
     names, copies, _ = scan_record_names(record_dir)
@@ -1779,8 +1930,9 @@ def confirmation_state(pace: Path, request: str, path: str | None = None) -> tup
         return result("pending", "A competing copy exists for this record; compare it before relying on either.", False)
     fields = item["fields"]
     later, _, issues = corrections_of(record_dir, request, one(fields, "project"))
-    # Damaged or unreadable files in the scanned project could hide a correction.
-    if any(i.get("type") in ("damaged", "unreadable", "newer-format", "conflict-copy") for i in issues):
+    # Damaged or unreadable files in the scanned project, or anything in Record/ not read, could hide a correction.
+    if any(i.get("type") in ("damaged", "unreadable", "newer-format", "conflict-copy") for i in issues) or \
+            unread_parts(issues, one(fields, "project")):
         return result("pending", "The correction search has unreadable or competing files; no current confirmation can be established here.", False, issues=issues)
     if later.get(request):
         return result("superseded", "This confirmation has a later correction or withdrawal. Read the later record and obtain fresh words if the act changed.",
@@ -1788,7 +1940,7 @@ def confirmation_state(pace: Path, request: str, path: str | None = None) -> tup
     problem = check_act(pace, fields, path)
     if problem:
         return result("pending", problem, False, request=request)
-    return result("confirmed", f"Confirmed (recorded): Record/{request}.md was read back and the exact act still matches. {CLOUD_NOTE}",
+    return result("confirmed", f"Confirmed (recorded): {RECORD_DIR}/{record_name(record_dir, request)} was read back and the exact act still matches. {CLOUD_NOTE}",
                   True, request=request, act_sha256=one(fields, "act-sha256"))
 
 
@@ -1805,16 +1957,16 @@ def cmd_confirmation_status(args) -> tuple:
 
 
 def approval_reference_state(pace: Path, request: str, linked: str) -> tuple:
-    if not REQUEST.match(request or ""):
+    if not is_request(request):
         return result("pending", "Not a record request id.", False)
-    item = load(pace / RECORD_DIR, f"{request}.md")
+    item = load(pace / RECORD_DIR, record_name(pace / RECORD_DIR, request))
     fields = item.get("fields") or {}
     if item["state"] != "readable" or one(fields, "kind") != "approval-reference" or one(fields, "confirmation-request") != linked:
         return result("pending", "No readable client approval reference linked to this confirmation.", False)
     current, current_code = confirmation_state(pace, linked)
     if current_code:
         return result("pending", "The linked owner confirmation is not current or its exact content cannot be checked.", False)
-    confirmed = load(pace / RECORD_DIR, f"{linked}.md")
+    confirmed = load(pace / RECORD_DIR, record_name(pace / RECORD_DIR, linked))
     if confirmed["state"] != "readable" or one(confirmed["fields"], "kind") != "confirmation":
         return result("pending", "The linked confirmation could not be read back.", False)
     if (one(fields, "act-sha256") != one(confirmed["fields"], "act-sha256") or
@@ -1827,7 +1979,8 @@ def approval_reference_state(pace: Path, request: str, linked: str) -> tuple:
     if any(r == request for r, _ in copies):
         return result("pending", "The client reference has a competing copy.", False)
     later, _, issues = corrections_of(pace / RECORD_DIR, request, one(fields, "project"))
-    if later.get(request) or any(i.get("type") in ("damaged", "unreadable", "newer-format", "conflict-copy") for i in issues):
+    if later.get(request) or any(i.get("type") in ("damaged", "unreadable", "newer-format", "conflict-copy") for i in issues) \
+            or unread_parts(issues, one(fields, "project")):
         return result("pending", "The client reference was corrected or its history cannot be checked.", False)
     decision = one(fields, "approval-decision")
     return result("reference-recorded", f"Client {decision} decision reference recorded and content checked locally. This tool has not contacted the client's approval system or verified the account.",
@@ -1843,7 +1996,7 @@ def cmd_approval_reference(args) -> tuple:
     owner, code = confirmation_state(pace, args.confirmation_request)
     if code:
         return result("pending", "The linked exact act is not currently confirmed; do not attach a client decision to changed content.", False, owner_confirmation=owner)
-    original = load(pace / RECORD_DIR, f"{args.confirmation_request}.md")["fields"]
+    original = load(pace / RECORD_DIR, record_name(pace / RECORD_DIR, args.confirmation_request))["fields"]
     if args.project != one(original, "project"):
         return result("pending", "Client reference must stay in the confirmation's project.", False)
     fields = {"request": [args.request], "project": [args.project], "kind": ["approval-reference"],
@@ -2211,6 +2364,9 @@ def main(argv=None) -> int:
         out, code = args.run(args)
     except NoPaceFolder as error:
         out, code = {"status": "not-run", "message": str(error)}, 1
+    except Exception as error:  # a command that fails must still say so, as one JSON object
+        out, code = {"status": "not-run", "message": f"Stopped on an unexpected error ({type(error).__name__}: {error}). "
+                     "Read back anything this was saving before relying on it."}, 1
     if KEPT_TEMP_FILES:
         report_kept_temp_files(out, args)
     print_result(out)

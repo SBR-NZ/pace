@@ -280,39 +280,26 @@ def check_records(pace: Path, found: Findings) -> tuple:
                           "that is there; ask the owner before deleting it, since it may hold a save that did not finish.",
                           files=[f"{pr.RECORD_DIR}/{issue['file']}"])
         elif kind == "unexpected-folder":
-            found.add("problem", "record-files", issue["message"], "Records belong directly in Record/. Ask the owner what "
-                      "the folder holds before moving anything.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
+            found.add("problem", "record-files", issue["message"], "Records belong directly in Record/, or in the year and "
+                      "month folders archiving makes. Ask the owner what the folder holds before moving anything.",
+                      files=[f"{pr.RECORD_DIR}/{issue['file']}"])
+        elif kind == "misplaced-record":
+            place = f"{pr.RECORD_DIR}/{pr.archive_folder(issue['request'])}/"
+            found.add("problem", "record-files", issue["message"], "Archiving puts a record only in the folder for the year "
+                      f"and month in its request id, so this one was moved by hand. With the owner's yes, move it to {place}, "
+                      "changing nothing in it; if a file with its name is already there or directly in Record/, compare "
+                      "the two first.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
+        elif kind == "unreadable":
+            found.add("problem", "record-files", issue["message"], "Check that this computer may read the folder and that "
+                      "it has finished syncing, then run the check again.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
+        elif kind == "misnamed-record":
+            found.add("problem", "record-files", issue["message"], "No tool reads it, so it was made by hand. Ask the owner "
+                      "what it should say, save that as a new record with a request id from new-request, and with the "
+                      "owner's yes move this file out of Record/.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
         else:
             found.add("warning", "record-files", issue["message"], "Ask the owner what it is; nothing in Record/ but "
                       "records is read.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
-    try:  # OneDrive counts every item in the folder, not only records
-        with os.scandir(record_dir) as listing:
-            items = sum(1 for _ in listing)
-    except OSError:
-        items = len(names) + len(copies)
-    if items >= RECORD_FOLDER_NOTE:
-        past = (f", more than the {RECORD_FOLDER_LIMIT:,} past which OneDrive's web pages show a folder slowly or with "
-                "errors" if items > RECORD_FOLDER_LIMIT else f". Past {RECORD_FOLDER_LIMIT:,} items in one folder, "
-                "OneDrive's web pages show it slowly or with errors")
-        found.add("note", "record-files", f"{pr.RECORD_DIR}/ holds {items:,} items{past}, and a OneDrive connection lists "
-                  "it more slowly.", "Nothing needs doing: syncing and Pace's tools work the same at any size. If OneDrive's "
-                  "web pages are slow, open the folder on a computer instead. Never move or rename a record to make the "
-                  f"folder smaller: Pace reads records only directly in {pr.RECORD_DIR}/.")
-    for request, name in copies:
-        try:
-            same = (record_dir / name).read_bytes() == (record_dir / f"{request}.md").read_bytes()
-        except OSError:
-            same = False
-        if same:
-            message = (f"{pr.RECORD_DIR}/{name} is a second copy of record {request}, for example from file syncing, and "
-                       "reads the same as it.")
-            fix = ("It adds nothing: with the owner's yes, move the copy out of Record/. The record itself stays as it is.")
-        else:
-            message = pr.copy_issue(request, name)["message"]
-            fix = ("Compare the two with the owner. The record itself is never replaced: if the copy holds what is right, "
-                   "save a new record that corrects the record with it, as records help describes. Then, with the owner's "
-                   "yes, move the copy out of Record/.")
-        found.add("problem", "record-files", message, fix, files=[f"{pr.RECORD_DIR}/{name}", f"{pr.RECORD_DIR}/{request}.md"])
+    sizes = folder_sizes(record_dir, names, copies)
     for stem, name in sorted(names.items()):
         item = pr.load(record_dir, name)
         if item["state"] == "readable":
@@ -334,9 +321,11 @@ def check_records(pace: Path, found: Findings) -> tuple:
     except (po.Stop, OSError) as error:
         found.add("problem", "records", f"The records could not be read together ({error}).", "Run the check again; if it "
                   "stops the same way, ask whoever supports your Pace setup.")
+        check_copies(found, record_dir, copies, None)
+        check_size(found, sizes, None, None)
         return None, people
     for earlier, pointers in folder.missing_corrected.items():
-        found.add("problem", "corrections", f"{listed(f'{pr.RECORD_DIR}/{p}.md' for p in pointers)} "
+        found.add("problem", "corrections", f"{listed(folder.where(p) for p in pointers)} "
                   f"{'corrects' if len(pointers) == 1 else 'correct'} {earlier}, but no file for it is in {pr.RECORD_DIR}/ here.",
                   "It may not have synced to this computer yet, or it was moved or removed: look for it in OneDrive, "
                   "including its recycle bin, before anything else.")
@@ -363,11 +352,223 @@ def check_records(pace: Path, found: Findings) -> tuple:
                             owed[name] += 1
             target = folder.field(stem, "target")
             if folder.field(stem, "kind") == "change" and target and target != pr.NO_PROJECT and not pr.parse_date(target):
-                found.add("warning", "records", f"{pr.RECORD_DIR}/{stem}.md gives the target {target!r}, which is not a real "
+                found.add("warning", "records", f"{folder.where(stem)} gives the target {target!r}, which is not a real "
                           "date, so it is not used.", "Save a change that corrects it with a date such as 2026-11-27.")
-    found.checked.append(f"{pr.RECORD_DIR}/: {plural(len(names), 'record file')}, each opened, with corrections followed to the "
-                         "current account.")
+    archived = sum(1 for name in names.values() if "/" in name)
+    found.checked.append(f"{pr.RECORD_DIR}/: {plural(len(names), 'record file')}"
+                         + (f", {archived} of them archived in its year and month folders" if archived else "")
+                         + ", each opened, with corrections followed to the current account.")
+    plan = folder.archive_plan()
+    lists = archive_lists(folder)
+    check_copies(found, record_dir, copies, lists, folder)
+    check_size(found, sizes, folder, plan)
+    check_archives(found, folder, lists)
     return folder, people
+
+
+def archive_lists(folder) -> dict:
+    """Every month folder list in the records of archives: request id -> [(record of the archive, month, digest, the
+    ids in that list, whether the list adds up)]."""
+    lists: dict = {}
+    for stem in sorted(folder.items):
+        item = folder.items[stem]
+        for month, requests, digest, said in po.archive_sections(item["fields"], item["body"]):
+            entry = (stem, month, digest, requests, said == len(requests))
+            for request in requests:
+                lists.setdefault(request, []).append(entry)
+    return lists
+
+
+def month_sha(record_dir: Path, month: str, request: str):
+    """The SHA-256 of a record in its month folder, or None when it is not there or cannot be read."""
+    try:
+        return pr.sha256((record_dir / month / f"{request}.md").read_bytes())
+    except OSError:
+        return None
+
+
+def listed_state(folder, record_dir: Path, month: str, request: str) -> tuple:
+    """Where a record an archive lists is now, and its SHA-256: ("moved", sha) in its month folder, ("waiting", sha)
+    still directly in Record/, or ("missing", None). A record that is there but could not be read has sha None.
+    A rename keeps every byte, so a waiting record counts towards its month's digest as it is."""
+    name = folder.names.get(request)
+    if name == f"{month}/{request}.md":
+        item = folder.items.get(request)
+        return "moved", item["sha256"] if item else None
+    sha = month_sha(record_dir, month, request)  # one record in two places: the copy in its month folder
+    if sha is not None:
+        return "moved", sha
+    if name == f"{request}.md":
+        item = folder.items.get(request)
+        return "waiting", item["sha256"] if item else None
+    return "missing", None
+
+
+def vouched(folder, record_dir: Path, request: str, lists: dict, data: bytes) -> bool:
+    """True when this content of the record is what an archive listed, by that list's digest."""
+    if folder is None:
+        return False
+    for _, month, digest, requests, adds_up in (lists or {}).get(request, []):
+        if not adds_up:
+            continue
+        shas = [pr.sha256(data) if other == request else listed_state(folder, record_dir, month, other)[1]
+                for other in requests]
+        if None not in shas and po.month_digest(list(zip(requests, shas))) == digest:
+            return True
+    return False
+
+
+def check_copies(found: Findings, record_dir: Path, copies: list, lists, folder=None) -> None:
+    """Second copies, and one record in two places, with the fix that keeps the copy an archive vouches for."""
+    for request, name in copies:
+        original = pr.record_name(record_dir, request)
+        try:
+            copy, kept = (record_dir / name).read_bytes(), (record_dir / original).read_bytes()
+        except OSError:
+            copy, kept = None, b""
+        files = [f"{pr.RECORD_DIR}/{name}", f"{pr.RECORD_DIR}/{original}"]
+        if pr.base_name(name) == pr.base_name(original):  # one record, directly in Record/ and in its month folder
+            month_copy = name if "/" in name else original
+            flat_copy = original if "/" in name else name
+            month_data = copy if month_copy == name else kept
+            flat_data = kept if month_copy == name else copy
+            month_ok = month_data is not None and vouched(folder, record_dir, request, lists, month_data)
+            flat_ok = flat_data is not None and vouched(folder, record_dir, request, lists, flat_data)
+            same = copy == kept
+            message = (f"{pr.RECORD_DIR}/{month_copy} and {pr.RECORD_DIR}/{flat_copy} are one record in two places"
+                       + (", and read the same." if same else ", and they differ."))
+            if same and month_ok:
+                fix = (f"It adds nothing: with the owner's yes, move {pr.RECORD_DIR}/{flat_copy} out of Record/. "
+                       f"{pr.RECORD_DIR}/{month_copy} is the one archiving moved, as the record of that archive shows.")
+            elif same:
+                fix = (f"It adds nothing: with the owner's yes, move {pr.RECORD_DIR}/{month_copy} out of Record/. No archive "
+                       "lists it there, so it was copied there by hand; the one directly in Record/ stays, and archiving "
+                       "moves it once its work is finished.")
+            else:
+                vouch = (f" {pr.RECORD_DIR}/{month_copy} matches the record of the archive that moved it." if month_ok else
+                         f" {pr.RECORD_DIR}/{flat_copy} matches the record of the archive that moved it, so the copy in "
+                         "its month folder has changed since." if flat_ok else "")
+                fix = ("Compare the two with the owner." + vouch + " A record is never replaced: if the other copy holds "
+                       "what is right, save a new record that corrects the record with it, as records help describes. "
+                       "Then, with the owner's yes, move the copy that is not kept out of Record/, changing nothing in "
+                       "either.")
+            found.add("problem", "record-files", message, fix, files=files)
+            continue
+        if copy is not None and copy == kept:
+            message = (f"{pr.RECORD_DIR}/{name} is a second copy of record {request}, for example from file syncing, and "
+                       "reads the same as it.")
+            fix = ("It adds nothing: with the owner's yes, move the copy out of Record/. The record itself stays as it is.")
+        else:
+            message = pr.copy_issue(request, name)["message"]
+            fix = ("Compare the two with the owner. The record itself is never replaced: if the copy holds what is right, "
+                   "save a new record that corrects the record with it, as records help describes. Then, with the owner's "
+                   "yes, move the copy out of Record/.")
+        found.add("problem", "record-files", message, fix, files=files)
+
+
+def folder_sizes(record_dir: Path, names: dict, copies: list) -> dict:
+    """How many items OneDrive counts in Record/ itself ("") and in each month folder ("2026/07/")."""
+    inside = [name for name in names.values() if "/" in name] + [name for _, name in copies if "/" in name]
+    try:
+        with os.scandir(record_dir) as listing:
+            sizes = {"": sum(1 for _ in listing)}
+    except OSError:
+        sizes = {"": len(names) + len(copies) - len(inside)}
+    for name in inside:
+        place = name.rsplit("/", 1)[0] + "/"
+        sizes[place] = sizes.get(place, 0) + 1
+    return sizes
+
+
+def check_size(found: Findings, sizes: dict, folder, plan) -> None:
+    """Record/ itself, or a month folder, nearing OneDrive's 5,000 items; and archiving, once it is worth suggesting."""
+    ready = len(plan["moves"]) + plan["more"] if plan else 0
+    months = po.ARCHIVE_AFTER_MONTHS
+    route = (f"Ask the assistant to preview archiving, as records help describes under Archiving finished work; nothing "
+             "moves without the owner's yes.")
+    for place, items in sorted(sizes.items()):
+        if items < RECORD_FOLDER_NOTE:
+            continue
+        where = f"{pr.RECORD_DIR}/{place}"
+        past = (f", more than the {RECORD_FOLDER_LIMIT:,} past which OneDrive's web pages show a folder slowly or with "
+                "errors" if items > RECORD_FOLDER_LIMIT else f". Past {RECORD_FOLDER_LIMIT:,} items in one folder, "
+                "OneDrive's web pages show it slowly or with errors")
+        message = f"{where} holds {items:,} items{past}, and a OneDrive connection lists it more slowly."
+        if place == "" and ready:
+            found.add("warning" if items > RECORD_FOLDER_LIMIT else "note", "record-files", message,
+                      f"Archive finished work: {ready:,} {'record' if ready == 1 else 'records'} of it "
+                      f"{'is' if ready == 1 else 'are'} more than {months} months old and could move, unchanged, into "
+                      f"their year and month folders. {route}")
+        else:
+            found.add("note", "record-files", message, "Nothing needs doing: syncing and Pace's tools work the same at any "
+                      "size. If OneDrive's web pages are slow, open the folder on a computer instead. Never move or rename a "
+                      f"record by hand: only archiving moves records, and only finished work more than {months} months old.")
+    if folder is not None and sizes.get("", 0) < RECORD_FOLDER_NOTE and folder.archive_suggested(plan):
+        found.add("note", "archive", f"{ready:,} {'record' if ready == 1 else 'records'} of finished work "
+                  f"{'is' if ready == 1 else 'are'} more than {months} months old and could be archived, which keeps "
+                  f"{pr.RECORD_DIR}/ itself, now {plan['in_record']:,} records, quicker to open on OneDrive's web pages "
+                  "and through a connection.", route)
+
+
+def check_archives(found: Findings, folder, lists: dict) -> None:
+    """Every record an archive lists is in its month folder and, by its digest, unchanged, or still directly in Record/
+    when the archive stopped before moving it; and every record in a month folder is listed by an archive."""
+    record_dir = folder.pace / pr.RECORD_DIR
+    checked, sections = 0, {}
+    for entries in lists.values():
+        for stem, month, digest, requests, adds_up in entries:
+            sections[(stem, month, digest)] = (requests, adds_up)
+    for (stem, month, digest), (requests, adds_up) in sorted(sections.items()):
+        place = f"{pr.RECORD_DIR}/{month}/"
+        checked += len(requests)
+        if not adds_up:
+            found.add("problem", "archive", f"The list of {place} in {folder.where(stem)} does not add up: it says one number "
+                      "of records and lists another, so it was edited or damaged.", "A record is never edited. Compare it "
+                      "with OneDrive's version history, and ask the owner before changing anything.")
+            continue
+        states = {request: listed_state(folder, record_dir, month, request) for request in requests}
+        missing = [request for request, (state, _) in states.items() if state == "missing"]
+        waiting = [request for request, (state, _) in states.items() if state == "waiting"]
+        if missing:
+            found.add("problem", "archive", f"{listed(missing)} {'is' if len(missing) == 1 else 'are'} not in {place}, "
+                      f"where {folder.where(stem)} says archiving moved {'it' if len(missing) == 1 else 'them'}.",
+                      "Look in OneDrive, including its recycle bin and version history, before anything else. A record "
+                      f"is never made again by hand; one moved out by hand goes back to {place} on the owner's yes, "
+                      "changing nothing in it.", requests=missing[:10])
+            continue
+        if waiting:
+            one = len(waiting) == 1
+            found.add("note", "archive", f"{listed(waiting)} {'is' if one else 'are'} still directly in Record/, whole, "
+                      f"though {folder.where(stem)} lists {'it' if one else 'them'} as moving to {place}.", "Nothing is "
+                      f"lost. A later archive moves {'it' if one else 'them'} once {'its' if one else 'their'} work is "
+                      f"finished and more than {po.ARCHIVE_AFTER_MONTHS} months old.")
+        shas = [sha for _, sha in states.values()]
+        if None not in shas and po.month_digest(list(zip(requests, shas))) != digest:  # one that cannot be read is named above
+            found.add("problem", "archive", f"Something in the {plural(len(requests), 'record')} that {folder.where(stem)} "
+                      f"archived into {place} has changed since: their digest no longer matches.", "A record is never "
+                      "edited. Compare them with OneDrive's version history to find the change, and ask the owner before "
+                      "changing anything.")
+    unlisted = [name for request, name in sorted(folder.names.items()) if "/" in name and request not in lists]
+    unread = [stem for stem in folder.names if stem not in folder.items]
+    if unlisted and unread:
+        found.add("note", "archive", f"{plural(len(unlisted), 'record')} in month folders "
+                  f"{'is' if len(unlisted) == 1 else 'are'} not listed by any archive this check could read, and "
+                  f"{plural(len(unread), 'record')} could not be read, so one may be the record of their archive. They are "
+                  "not judged until every record can be read.", "Let OneDrive finish syncing and put right the records "
+                  "named above that could not be read, then run the check again.",
+                  files=[f"{pr.RECORD_DIR}/{name}" for name in unlisted[:10]])
+    elif unlisted:
+        one = len(unlisted) == 1
+        found.add("problem", "archive", f"{listed(f'{pr.RECORD_DIR}/{name}' for name in unlisted)} "
+                  f"{'is in a month folder, but no archive lists it' if one else 'are in month folders, but no archive lists them'}.",
+                  "First let OneDrive finish syncing and run the check again: the record of their archive may not be on "
+                  "this computer yet. If they are still not listed, they were moved there by hand: with the owner's yes, "
+                  f"move {'it' if one else 'each'} back directly into Record/, changing nothing in it. Archiving moves "
+                  f"{'it' if one else 'them'} again once {'its' if one else 'their'} work is finished and more than "
+                  f"{po.ARCHIVE_AFTER_MONTHS} months old.", files=[f"{pr.RECORD_DIR}/{name}" for name in unlisted[:10]])
+    if checked:
+        found.checked.append(f"Archived records: {plural(checked, 'record')} checked against the records of the archives "
+                             "that moved them.")
 
 
 def check_projects(pace: Path, found: Findings, folder) -> list:

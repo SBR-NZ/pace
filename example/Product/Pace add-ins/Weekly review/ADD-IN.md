@@ -30,7 +30,7 @@ When the owner asks for a weekly review, to go through or tidy up open work, or 
 7. Before saving, show the changes as one list, such as "3. Board pack: done" or "12. Supplier call: due Friday 6 November 2026", and ask the owner to confirm. A day given in words, such as "Friday", is turned into a date and shown for the owner to check.
 8. On the owner's yes in their own words, save each change as its own record that corrects the item's current account, with the owner's words, as [Records and source evidence](../../Help/records.md) describes; the record tool has a command for exactly this. Read each one back, call it saved only then, and say which, if any, could not be saved.
 9. For an item recorded two ways, once the owner says which account stands, withdraw the other, then make any change the owner gave to the one that stands.
-10. End with what changed: how many were done, cancelled, given a new date or passed to someone else, how many stay as they are, and anything not saved.
+10. End with what changed: how many were done, cancelled, given a new date or passed to someone else, how many stay as they are, and anything not saved. If the review list says finished work could be archived, say so in one line and offer it, as [Records and source evidence](../../Help/records.md) describes; nothing moves without the owner's yes.
 
 ## What it gives back
 

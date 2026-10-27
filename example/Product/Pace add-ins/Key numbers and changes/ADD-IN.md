@@ -20,7 +20,7 @@ When the owner hands over a new pack, forecast or export and asks what changed, 
 5. Compare two figures only when they match on meaning, scope, period, actual, budget or forecast, currency, unit, scale and sign. Otherwise say "not comparable" and name what differs. Do not convert between thousands and units, or between currencies, unless the owner asks and agrees how.
 6. Group the changes so their meaning is clear:
    - a forecast replaced by a newer forecast: normal movement;
-   - an actual that was already reported has changed: check with the What was reported add-in if it is switched on, or search the record;
+   - an actual that was already reported has changed: check with the What was reported add-in if it is switched on, or search the record, including the year and month folders inside `Record/` for anything reported more than 3 months ago;
    - a budget the owner accepted has changed;
    - any other change.
 7. Show a table of each number with its period, the before and after values, the change, and where each value came from (file and place).

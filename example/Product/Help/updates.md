@@ -36,6 +36,10 @@ Nothing else changes: projects keep their ids, and records saved before 3.11.0 k
 
 From 3.11.0 the updater checks the folder names itself: until they are renamed, its preview lists what to do and both `prepare` and the install stop before changing anything. An updater from before 3.11.0 does not know about the rename and would install the release over the old names, after which the record tool says which folders to rename. So rename the folders first, or run the new release's own updater as under [Running it](#running-it). Going back to a release from before 3.11.0 needs the old names back, and the updater says so in the same way.
 
+## Archived records from 3.14.0
+
+From release 3.14.0 finished work can be archived into year and month folders inside `Record/`, as [Records and source evidence](records.md) describes under Archiving finished work. An update never moves a record, and `Record/` is protected with everything in it. Releases before 3.14.0 cannot read archived records, so once a folder has some, the updater will not install an earlier release: its preview says so, and `prepare` and the install stop before changing anything.
+
 ## Pace.md
 
 `Pace.md` is mostly Pace's own text, in parts that each start at a heading. Three parts end with a mark, `<!-- Your lines go below this one. Pace updates never change them. -->`: the add-in index lines, standing instructions and the time zone line go below it. The last line of `Pace.md` records each part as Pace shipped it, so an update can tell which parts you have changed. An update:

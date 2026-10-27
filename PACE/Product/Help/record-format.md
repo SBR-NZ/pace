@@ -4,11 +4,13 @@ This page describes exactly what a record file looks like, so any assistant can 
 
 ## Where a record goes and its name
 
-Each record is one new text file directly in `Record/`, never in a subfolder. Its name is its request id followed by `.md`:
+Each record is saved as one new text file directly in `Record/`, never in a subfolder. Its name is its request id followed by `.md`:
 
 ```text
 Record/20261022T221500Z--kowhai-budget--k3f9q2.md
 ```
+
+Once its work is finished and more than 3 months old, archiving may move it, unchanged and under the same name, into the folder for the year and month in its request id, such as `Record/2026/10/20261022T221500Z--kowhai-budget--k3f9q2.md`. Nothing else moves a record. [Records and source evidence](records.md) describes archiving.
 
 The request id has three parts joined by two hyphens:
 
@@ -105,7 +107,7 @@ A record may carry extra header lines with other lowercase names. A record-1 rea
 
 ## Reading records by hand
 
-1. List the names in `Record/` without opening the files. The names alone show when each record was started and its project, so pick only the ones the question needs, newest first.
-2. Open just those files. A record whose `corrects` names an earlier record replaces that earlier one, which stays readable as history. A `withdrawal` means the earlier record no longer stands. Two records correcting the same earlier record are competing accounts: show both. To settle them, correct the one that stands and withdraw the other.
+1. List the names in `Record/` without opening the files. The names alone show when each record was started and its project, so pick only the ones the question needs, newest first. Open work, project changes and everything from the last 3 months are always directly in `Record/`. Finished work from before then may be archived in the year and month folders inside it, such as `Record/2026/07/`: list those too when the question reaches back that far, and say which folders were listed.
+2. Open just those files. A record whose `corrects` names an earlier record replaces that earlier one, which stays readable as history; one that is not directly in `Record/` may be archived, in the folder for the year and month in its request id. A `withdrawal` means the earlier record no longer stands. Two records correcting the same earlier record are competing accounts: show both. To settle them, correct the one that stands and withdraw the other.
 3. A name that looks like a record's name with something added, such as `... (1).md` or `...-LAPTOP.md`, is a second copy, often made by file syncing. Neither copy is assumed right.
 4. Say what you looked at. Do not say a list is complete when only part of `Record/` was read.

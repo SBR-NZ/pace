@@ -123,7 +123,7 @@ class HealthCheckTests(CheckCase):
 
     def test_the_help_page_names_both(self):
         text = (PACE_FOLDER / "Product/Help/health-check.md").read_text(encoding="utf-8")
-        self.assertIn("From 4,000 items it notes how close `Record/` is to 5,000", text)
+        self.assertIn("From 4,000 items it notes how close `Record/`, or one of its month folders, is to 5,000", text)
         self.assertIn("- **A new folder:** one whose `Record/` and `1 Projects/` are both empty is pointed to the Getting "
                       "started add-in.", text)
 

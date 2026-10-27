@@ -14,6 +14,7 @@ Help: Product/Help/hosts-and-views.md (The overview tool) and the Project overvi
 from __future__ import annotations
 
 import argparse
+import calendar
 import datetime as dt
 import importlib.util
 import json
@@ -38,6 +39,17 @@ WEEK_DAYS = 7  # the "Last 7 days" line, today included
 AGE_DAYS = 14  # work with no due date shows how long it has been open from this many days
 FOLD_AFTER = 10  # a person owing more than this many items has their undated work folded by client
 OWNER_WORDS = {"owner", "the owner"}
+# Archiving: finished work moves, unchanged, into Record/<year>/<month>/ once every record in its story is more than
+# ARCHIVE_AFTER_MONTHS months old. Open work, work recorded two ways and project changes always stay in Record/.
+ARCHIVE_AFTER_MONTHS = 3
+ARCHIVE_SUGGEST_FILES = 2000    # suggested once Record/ itself holds this many records...
+ARCHIVE_SUGGEST_RECORDS = 500   # ...and at least this many could move
+ARCHIVE_BATCH = 1500            # records one archive moves at most, oldest first, so its record stays a readable size
+ARCHIVE_LIST_BYTES = 56 * 1024  # and at most this much of the list in that record, so it is always within a record's size
+ARCHIVE_FOLDER_LINE_BYTES = 120  # each month folder's line and the blank line before it, in that list
+ARCHIVE_SUBJECT = "Records archived"  # the subject of the record an archive saves
+# A month folder's line in that record, followed by the request ids moved into it, one to a line.
+ARCHIVE_MONTH_LINE = re.compile(r"^Record/(\d{4})/(\d{2})/ - (\d+) records? - digest ([0-9a-f]{64})$")
 ESCAPES = (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#39;"))
 DOT = " &middot; "
 CHEVRON = " &rsaquo;"
@@ -96,6 +108,41 @@ def how_long_ago(day: dt.date, today: dt.date) -> str:
     return "yesterday" if gap == 1 else f"{days_word(gap)} ago"
 
 
+def month_digest(lines: list) -> str:
+    """The SHA-256 of one line for each record, in order: its request id, a space and the SHA-256 of its file."""
+    return pr.sha256("".join(f"{request} {digest}\n" for request, digest in lines).encode("utf-8"))
+
+
+def archive_sections(fields: dict, body: str) -> list:
+    """Each month folder the record of an archive lists, as (folder, request ids, digest, the number it says it lists);
+    empty for any other record."""
+    if pr.one(fields, "kind") != "note" or ARCHIVE_SUBJECT not in (fields.get("subject") or []):
+        return []
+    lists, current = [], None
+    for line in body.split("\n"):
+        match = ARCHIVE_MONTH_LINE.match(line.strip())
+        if match:
+            current = (f"{match.group(1)}/{match.group(2)}", [], match.group(4), int(match.group(3)))
+            lists.append(current)
+        elif current is not None and pr.REQUEST.match(line.strip()):
+            current[1].append(line.strip())
+        elif not line.strip():
+            current = None
+    return lists
+
+
+def archive_lists(fields: dict, body: str) -> list:
+    """The month folders whose lists add up, as (folder, request ids, digest)."""
+    return [(month, requests, digest) for month, requests, digest, said in archive_sections(fields, body)
+            if said == len(requests)]
+
+
+def months_before(day: dt.date, months: int) -> dt.date:
+    """The same day of the month, the given number of months earlier, or that month's last day when it is shorter."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    return dt.date(year, month + 1, min(day.day, calendar.monthrange(year, month + 1)[1]))
+
+
 def day_and_age(day: dt.date | None, today: dt.date) -> str:
     """A record's date and how long ago it was. With no Time zone line a record keeps the date it was written with,
     which can be after this computer's today; that date is shown alone rather than called today."""
@@ -144,6 +191,8 @@ class Folder:
             raise Stop(f"{pr.RECORD_DIR}/ could not be listed ({error}), so no overview was made.") from None
         self.names = names
         self.items, self.problems, self.notes, self.left_out = {}, [], [], 0
+        # Projects with a record that cannot be relied on, or a second copy: any of their stories could be unsettled.
+        self.unsettled_projects = set()
         for issue in project_issues + name_issues:
             note = self._leftover_copy(record_dir, issue)
             if note:
@@ -159,13 +208,22 @@ class Folder:
                 self.items[stem] = item
                 if item["state"] == "invalid":
                     self.problems.append(pr.problem_issue(item)["message"])
+                    self.unsettled_projects.add(pr.REQUEST.match(stem).group(2))
             elif item["state"] == "missing":
                 self.problems.append(f"{pr.RECORD_DIR}/{name} was listed but had gone when opened.")
+                self.unsettled_projects.add(pr.REQUEST.match(stem).group(2))
             else:
                 self.problems.append(pr.problem_issue(item)["message"])
+                self.unsettled_projects.add(pr.REQUEST.match(stem).group(2))
         for request, name in copies:
             self.problems.append(pr.copy_issue(request, name)["message"])
+            self.unsettled_projects.add(pr.REQUEST_START.match(request).group(2))
+        for issue in name_issues:
+            if issue.get("request"):  # a record moved out of its month folder by hand
+                self.unsettled_projects.add(pr.REQUEST_START.match(issue["request"]).group(2))
+        self.name_issues = name_issues
         self.files_in_record = len(names)  # second copies are named in problems, never opened as records
+        self.archived_files = sum(1 for name in names.values() if "/" in name)
         self.chains = self._chains()
         self._facts = self._project_facts()  # read once, so every view names the same problems
 
@@ -181,14 +239,14 @@ class Folder:
         parts = name[len(pr.TEMP_PREFIX):].rsplit("-", 2)
         if not name.startswith(pr.TEMP_PREFIX) or len(parts) != 3 or not pr.REQUEST.match(parts[0]):
             return ""
-        saved = record_dir / f"{parts[0]}.md"
+        saved = pr.record_name(record_dir, parts[0])  # beside it, or in its month folder once archived
         try:
-            same = saved.is_file() and saved.read_bytes() == (record_dir / name).read_bytes()
+            same = (record_dir / saved).is_file() and (record_dir / saved).read_bytes() == (record_dir / name).read_bytes()
         except OSError:
             return ""
         if not same:
             return ""
-        return (f"{pr.RECORD_DIR}/{name} is a leftover copy of {pr.RECORD_DIR}/{parts[0]}.md from a save that finished; the "
+        return (f"{pr.RECORD_DIR}/{name} is a leftover copy of {pr.RECORD_DIR}/{saved} from a save that finished; the "
                 f"record reads the same. {pr.TEMP_NOTE}")
 
     def made_after(self, stem: str, item: dict) -> bool:
@@ -246,7 +304,7 @@ class Folder:
                 node = earlier
             groups.setdefault(root, set()).add(stem)
         for earlier, pointers in sorted(missing.items()):
-            self.problems.append(f"{pr.RECORD_DIR}/{', '.join(f'{p}.md' for p in sorted(pointers))} "
+            self.problems.append(f"{', '.join(self.where(p) for p in sorted(pointers))} "
                                  f"{'corrects' if len(pointers) == 1 else 'correct'} {earlier}, but no file for it is in "
                                  f"{pr.RECORD_DIR}/ here.")
         self.missing_corrected = {earlier: sorted(pointers) for earlier, pointers in sorted(missing.items())}
@@ -261,8 +319,79 @@ class Folder:
             if not leaves:  # every account is in the loop
                 leaves = sorted(loops.get(root, members))
             current = [node for node in leaves if self.field(node, "kind") != "withdrawal"]
-            chains.append({"first": root, "current": current})
+            chains.append({"first": root, "current": current, "members": sorted(members),
+                           "loop": any(len(cycle) > 1 and cycle & members for cycle in loops.values())})
         return chains
+
+    def where(self, stem: str) -> str:
+        """A record's place, directly in Record/ or in its month folder."""
+        return f"{pr.RECORD_DIR}/{self.names.get(stem, stem + '.md')}"
+
+    # Archiving
+
+    def archive_plan(self, moment: dt.datetime | None = None) -> dict:
+        """What archiving would move now, and why the rest stays in Record/.
+
+        A story moves when its work is finished, so its current account is not open work, not a project change and
+        not recorded two ways, and every record in it is more than ARCHIVE_AFTER_MONTHS months old by the date in its
+        request id. It moves whole, each record into the folder for the year and month in its own request id, oldest
+        stories first and at most ARCHIVE_BATCH records at a time. A story with a missing record, corrections that
+        loop, or in a project with a record that cannot be relied on or a second copy, stays."""
+        moment = (moment or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
+        cutoff_day = months_before(moment.date(), ARCHIVE_AFTER_MONTHS)
+        cutoff = dt.datetime.combine(cutoff_day, dt.time(), dt.timezone.utc)
+        stays = {"open": 0, "two_ways": 0, "project_changes": 0, "unsettled": 0, "recent": 0, "too_long": 0}
+        ready = []
+        for chain in self.chains:
+            members, current = chain["members"], chain["current"]
+            # Every member is a record that was read; the first may be a record that is missing, or not a request id.
+            projects = {pr.REQUEST_START.match(stem).group(2) for stem in members}
+            kind = self.field(current[0], "kind") if len(current) == 1 else ""
+            if (chain["first"] not in self.items or chain["loop"] or projects & self.unsettled_projects
+                    or any(self.items[stem]["state"] != "readable" for stem in members)):
+                reason = "unsettled"
+            elif len(current) > 1:
+                reason = "two_ways"
+            elif kind == "action" and self.field(current[0], "state") not in ("done", "cancelled"):
+                reason = "open"
+            elif kind == "change":
+                reason = "project_changes"
+            elif max(pr.request_time(stem) for stem in members) >= cutoff:
+                reason = "recent"
+            else:
+                reason = ""
+            if reason:
+                stays[reason] += 1
+                continue
+            moving = [stem for stem in members if "/" not in self.names[stem]]
+            # A story longer than one archive's record can list stays, so it never holds up the rest.
+            size = sum(len(stem) + 1 for stem in moving) + ARCHIVE_FOLDER_LINE_BYTES * len(
+                {pr.archive_folder(stem) for stem in moving})
+            if len(moving) > ARCHIVE_BATCH or size > ARCHIVE_LIST_BYTES:
+                stays["too_long"] += 1
+            elif moving:
+                ready.append((max(pr.request_time(stem) for stem in members), chain["first"], moving))
+        ready.sort()
+        moves, stories, more, months, listed = [], 0, 0, set(), 0
+        for _, _, moving in ready:
+            # The list of this story's records in the record of the archive, with any month folder it adds.
+            new_months = {pr.archive_folder(stem) for stem in moving} - months
+            size = sum(len(stem) + 1 for stem in moving) + ARCHIVE_FOLDER_LINE_BYTES * len(new_months)
+            if moves and (len(moves) + len(moving) > ARCHIVE_BATCH or listed + size > ARCHIVE_LIST_BYTES) or more:
+                more += len(moving)
+                continue
+            stories, listed = stories + 1, listed + size
+            months |= new_months
+            moves += [{"request": stem, "from": self.names[stem], "to": f"{pr.archive_folder(stem)}/{stem}.md",
+                       "sha256": self.items[stem]["sha256"]} for stem in moving]
+        moves.sort(key=lambda move: move["to"])
+        return {"cutoff": cutoff_day, "moves": moves, "stories": stories, "more": more, "stays": stays,
+                "in_record": sum(1 for name in self.names.values() if "/" not in name)}
+
+    def archive_suggested(self, plan: dict) -> bool:
+        """Whether archiving is worth suggesting: Record/ itself is large and enough could move."""
+        return (plan["in_record"] >= ARCHIVE_SUGGEST_FILES
+                and len(plan["moves"]) + plan["more"] >= ARCHIVE_SUGGEST_RECORDS)
 
     # Projects
 
@@ -340,7 +469,7 @@ class Folder:
                 for stem, kind in zip(current, kinds):
                     value = self.field(stem, key) if kind == "change" else ""
                     if key == "target" and value and value != pr.NO_PROJECT and not pr.parse_date(value):
-                        self.problems.append(f"{pr.RECORD_DIR}/{stem}.md gives the target {value!r}, which is not a real "
+                        self.problems.append(f"{self.where(stem)} gives the target {value!r}, which is not a real "
                                              "date, so it was not used.")
                         value = ""
                     values.append(value)
@@ -1261,8 +1390,9 @@ def save_page(folder: Folder, name: str, page: str) -> tuple:
 def searched_lines(folder: Folder) -> tuple:
     """What was searched and what could not be read, in the page's words."""
     files, projects = folder.files_in_record, len(folder.projects)
-    records = (f"All {files} record files in {pr.RECORD_DIR}/, each opened" if files > 1 else
-               f"The one record file in {pr.RECORD_DIR}/, opened" if files == 1 else f"{pr.RECORD_DIR}/, which holds no record files")
+    place = f"{pr.RECORD_DIR}/ and its year and month folders" if folder.archived_files else f"{pr.RECORD_DIR}/"
+    records = (f"All {files} record files in {place}, each opened" if files > 1 else
+               f"The one record file in {place}, opened" if files == 1 else f"{pr.RECORD_DIR}/, which holds no record files")
     if folder.left_out:
         records += (f"; {folder.left_out} made after this page's as-at moment {'was' if folder.left_out == 1 else 'were'} "
                     "left out")
@@ -1293,11 +1423,16 @@ def review_result(folder: Folder, args, notes: str) -> tuple:
             + "Nothing was saved or changed.")
     partial = " Partial: something could not be read; see could_not_read." if folder.problems else ""
     scope = f"{folder.label(args.project)} and the projects inside it" if args.project else "every project"
+    plan = folder.archive_plan(folder.now)
+    ready, suggested = len(plan["moves"]) + plan["more"], folder.archive_suggested(plan)
+    if suggested:
+        said += (f" {ready} records of finished work are more than {ARCHIVE_AFTER_MONTHS} months old and could be "
+                 "archived, which keeps Record/ itself small; records help describes it.")
     return pr.result("made", f"Review list for {scope}, as at {long_moment(folder.now)}. {said}{partial}{notes}", True,
                      view="review", as_at=long_moment(folder.now), groups=review["groups"], counts=counts,
                      searched=searched_and_read[0], could_not_read=searched_and_read[1], complete=not folder.problems,
                      housekeeping=folder.notes, time_zone=folder.zone_name, owner_names=sorted(folder.owner_names),
-                     folders_without_id=folder.unlabelled)
+                     folders_without_id=folder.unlabelled, archive_suggested=suggested, archive_ready=ready)
 
 
 def _run(args) -> tuple:
@@ -1397,6 +1532,9 @@ def run(args) -> tuple:
     except OverflowError:
         return {"status": "not-made", "message": "A date is too near the start or end of the calendar to work with, so no "
                                                  "overview was made."}, 1
+    except Exception as error:  # whatever stops it, the answer is one JSON object
+        return {"status": "not-made", "message": f"Stopped on an unexpected error ({type(error).__name__}: {error}), so no "
+                                                 "overview was made. Ask whoever supports your Pace setup."}, 1
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -155,13 +155,14 @@ class RecordCountTests(CheckCase):
             [item] = self.said(self.check())
         for gone in ("keep earlier years' records apart", "whoever supports"):
             self.assertNotIn(gone, item["fix"])
+        # From 3.14.0 archiving is the one route, and only for finished work; with none to archive, nothing needs doing.
         for phrase in ("Nothing needs doing: syncing and Pace's tools work the same at any size.",
-                       "Never move or rename a record to make the folder smaller: Pace reads records only directly in "
-                       "Record/."):
+                       "Never move or rename a record by hand: only archiving moves records, and only finished work "
+                       "more than 3 months old."):
             self.assertIn(phrase, item["fix"])
         text = read(HELP / "health-check.md")
-        self.assertIn("From 4,000 items it notes how close `Record/` is to 5,000", text)
-        self.assertIn("It is only a note: syncing and Pace's tools work the same at any size.", text)
+        self.assertIn("From 4,000 items it notes how close `Record/`, or one of its month folders, is to 5,000", text)
+        self.assertIn("Otherwise it is only a note: syncing and Pace's tools work the same at any size.", text)
         self.assertIn("A folder that could not be read in full is never called new.", text)
 
 

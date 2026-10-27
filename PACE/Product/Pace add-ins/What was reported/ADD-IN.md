@@ -24,7 +24,7 @@ When the owner wants a reporting occasion kept, such as "record what went in the
 
 ### Answering what was reported
 
-1. Search the record for matching reporting occasions. Follow [Records and source evidence](../../Help/records.md) for how to search and how to say what the search covered.
+1. Search the record for matching reporting occasions, including the year and month folders inside `Record/` for occasions more than 3 months ago. Follow [Records and source evidence](../../Help/records.md) for how to search and how to say what the search covered.
 2. Answer from the exact words recorded for that occasion, with its date, audience and source. Never replace them with a newer actual or a more precise number.
 3. If several occasions match, show each one separately. If the owner needs just one, ask them to narrow it by date, audience or period. Do not pick the newest.
 4. Include drafts only when the owner asks for them, and label each one as a draft.

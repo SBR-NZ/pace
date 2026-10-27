@@ -5,9 +5,9 @@
 | Need | Path in PACE | Ownership |
 | --- | --- | --- |
 | Chat entry point and add-in index | `PACE/Pace.md` | Owner's lines below each mark, never changed by updates; Pace's own parts kept current by updates while the owner has not changed them (`Product/Help/updates.md`) |
-| Versioned Product and core help | `PACE/Product/` (`Help/` for help, `Tools/` for the record tool, updater, overview tool and health check, `LICENSE.md` for the licence) | Shipped Product; this is the canonical Product source in the repo |
+| Versioned Product and core help | `PACE/Product/` (`Help/` for help, `Tools/` for the record tool, updater, overview tool, health check and archive tool, `LICENSE.md` for the licence) | Shipped Product; this is the canonical Product source in the repo |
 | Shipped add-ins | `PACE/Product/Pace add-ins/` | Product; one folder per add-in with its `ADD-IN.md` and optional host launchers (Project overview also has its page template), all off until listed in `Pace.md` |
-| Records | `PACE/Record/` | Owner; one new file per record in format record-1 (`Product/Help/record-format.md`), never edited |
+| Records | `PACE/Record/` | Owner; one new file per record in format record-1 (`Product/Help/record-format.md`), never edited; finished work more than 3 months old may be archived, on the owner's yes, into year and month folders such as `Record/2026/07/` (`Product/Help/records.md`) |
 | Projects | `PACE/1 Projects/` | Owner; project folders, each inside its parent's folder at any depth (usually `<parent project>/<project>/`), each with a `Pace project.md` holding its stable id and a `Documents/` folder, where each piece of work has one working file and an `Archive/` of the dated versions that went out (`Product/Help/projects.md`) |
 | Repository references | `PACE/Repos/` | Owner; one home reference under the project's own place, such as `<parent project>/<project>/<repo>/` (or `<project>/<repo>/` for a standalone project), tied to the stable project id; explicit cross-project links for shared repos (`Product/Help/repositories.md`) |
 | Optional dated views | `PACE/2 Views/` | Owner; dated pages over `Record/`, never a second source of decisions or job state (`Product/Help/hosts-and-views.md`) |
