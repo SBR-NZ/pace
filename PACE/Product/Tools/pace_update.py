@@ -543,6 +543,58 @@ def archive_stop(root: Path, release: dict) -> str:
             "cannot read, so its tools would miss them. Install Pace 3.14.0 or later instead.")
 
 
+NUMBERS_READER = b"def plain_name("
+NUMBERED_FOLDER = re.compile(r"[0-9]{2}\. .+", re.S)
+NUMBERED_DOCUMENTS = "01. documents"
+
+
+def _numbered(base: Path, depth: int = 40) -> bool:
+    """True when a project folder in 1 Projects/ is numbered: it starts with its number, such as 02. Budget 2027, or
+    holds 01. Documents/. Only project folders are looked into, as Pace numbers no other folder, so a repository
+    checkout or a folder of the owner's own is never taken for one. Links are not followed, and a folder reached again,
+    as through a junction, is not looked into twice."""
+    stack, seen = [(base, 0)], set()
+    while stack:
+        folder, level = stack.pop()
+        try:
+            real = os.path.normcase(os.path.realpath(folder))
+        except OSError:
+            continue
+        if real in seen:
+            continue
+        seen.add(real)
+        try:
+            with os.scandir(folder) as entries:
+                names = [entry.name for entry in entries if entry.is_dir(follow_symlinks=False)]
+        except OSError:
+            continue
+        for name in names:
+            if level and name.casefold() == NUMBERED_DOCUMENTS:
+                return True
+            try:
+                project = (folder / name / "Pace project.md").is_file()
+            except OSError:
+                continue
+            if project and NUMBERED_FOLDER.fullmatch(name):
+                return True
+            if project and level + 1 < depth:
+                stack.append((folder / name, level + 1))
+    return False
+
+
+def numbers_stop(root: Path, release: dict) -> str:
+    """Why this release cannot be installed here, or "": once project folders are numbered, a release whose tools do not
+    know folder numbers would show each number in its project's name and take each 01. Documents/ for a folder to sort
+    out."""
+    if NUMBERS_READER in (release.get("files") or {}).get("Tools/pace_record.py", b""):
+        return ""
+    if not _numbered(root / "1 Projects"):
+        return ""
+    return (f"This Pace folder's project folders are numbered, which Pace {release['tag']}'s tools do not know: they "
+            "would show each number in its project's name and take each 01. Documents/ for a folder to sort out. Install "
+            "Pace 3.16.0 or later instead.")
+
+
 def folder_renames(root: Path, release: dict) -> list:
     """The owner's folders to sort out before this release is installed, each as {"from", "to", "do"}.
 
@@ -1395,7 +1447,7 @@ def preview(root, repo: str, tag: str, commit: str | None = None, *, upstream: d
     result["message"] = "This is a preview. Nothing has been installed or recorded."
     renames = folder_renames(folder, release)
     lines = old_folder_lines(folder, plan)
-    archive = archive_stop(folder, release)
+    archive = archive_stop(folder, release) or numbers_stop(folder, release)
     if archive:
         result["status"] = "cannot install"
         result["message"] += " " + archive
@@ -1441,7 +1493,7 @@ def prepare(root, repo: str, tag: str, commit: str, *, upstream: dict | None = N
     if not (folder / "Pace.md").is_file():
         raise Stop("A local proposal needs a person's Pace.md; central copies use IT change control.")
     plan = _plan(folder, repo, tag, check_commit_id(commit), upstream, expect_digest)
-    archive = archive_stop(folder, plan["release"])
+    archive = archive_stop(folder, plan["release"]) or numbers_stop(folder, plan["release"])
     if archive:
         raise Stop(archive + " No proposal was saved.")
     renames = folder_renames(folder, plan["release"])
@@ -1850,7 +1902,7 @@ def apply(root, repo: str, tag: str, commit: str, *, upstream: dict | None = Non
 
     plan = _plan(folder, repo, tag, commit, upstream, expect_digest)
     release = plan["release"]
-    archive = archive_stop(folder, release)
+    archive = archive_stop(folder, release) or numbers_stop(folder, release)
     if archive:
         raise Stop(archive + " Nothing was installed.")
     renames = folder_renames(folder, release)

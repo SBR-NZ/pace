@@ -35,9 +35,10 @@ TODAY = dt.datetime.now().astimezone().date()
 STATE: dict = {}
 
 
-def write_project(pace: Path, pid: str, name: str, parent: str = "none", inside: Path | None = None) -> Path:
+def write_project(pace: Path, pid: str, name: str, parent: str = "none", inside: Path | None = None,
+                  documents: str = "Documents") -> Path:
     folder = (inside or pace / "1 Projects") / name
-    (folder / "Documents").mkdir(parents=True, exist_ok=True)
+    (folder / documents).mkdir(parents=True, exist_ok=True)
     (folder / "Pace project.md").write_text(f"---\nformat: project-1\nid: {pid}\nparent: {parent}\n"
                                             "created: 2026-10-20T09:00:00+13:00\nby: Test\n---\n\nInvented work.\n",
                                             encoding="utf-8")
@@ -73,8 +74,9 @@ def setUpModule():
     text = text.replace(f"{MARK}\n## Time zone", f"{MARK}\nOwner: {OWNER}\n\n## Time zone")
     text = text.replace(f"{MARK}\n## Help", f"{MARK}\nTime zone: Pacific/Auckland\n\n## Help")
     pace_md.write_text(text, encoding="utf-8")
-    client = write_project(folder, "kowhai", "Kowhai Books")
-    write_project(folder, "kowhai-budget", "Budget 2027", parent="kowhai", inside=client)
+    # Numbered, as projects are from 3.16.0; Repos/ mirrors them by their names, without the numbers.
+    client = write_project(folder, "kowhai", "01. Kowhai Books", documents="01. Documents")
+    write_project(folder, "kowhai-budget", "02. Budget 2027", parent="kowhai", inside=client, documents="01. Documents")
     write_record(folder, "20261025T010000Z--kowhai-budget--act001", owed_by=OWNER, state="open")
     write_record(folder, "20261025T020000Z--kowhai--act002", subject="Site copy", owed_by="Ana Ruiz", state="open")
     (folder / "Repos/Kowhai Books/Budget 2027/budget-model").mkdir(parents=True)
@@ -297,8 +299,8 @@ class ProjectAndRepoTests(CheckCase):
         out = self.check()
         found = sorted((item["level"], item["message"]) for item in self.found(out, "repos"))
         self.assertEqual(found, [
-            ("note", "Repos/budget-model/Pace repo.md is not in its project's place: Repos/ mirrors 1 Projects/, so it "
-                     "belongs in a folder of its own under Repos/Kowhai Books/Budget 2027/."),
+            ("note", "Repos/budget-model/Pace repo.md is not in its project's place: Repos/ mirrors 1 Projects/ by the "
+                     "projects' names, so it belongs in a folder of its own under Repos/Kowhai Books/Budget 2027/."),
             ("warning", "Repos/Kowhai Books/other/Pace repo.md names project id kahu-trust, which no project in 1 Projects/ has."),
             ("warning", "Repos/Kowhai Books/third/Pace repo.md names no Home project id.")])
 

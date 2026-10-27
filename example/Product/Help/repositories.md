@@ -4,7 +4,7 @@ A repository is a place for code. `Repos/` holds **references**, not copied code
 
 ## One home per repository
 
-Mirror the project's place in `1 Projects/`: for a project inside a parent (often a client), use `Repos/<parent>/<project>/<repo>/Pace repo.md`, with one more folder for each level a project sits below that. For a standalone project use `Repos/<project>/<repo>/Pace repo.md`. Match the folder names in `1 Projects/`. For example:
+Mirror the project's place in `1 Projects/`: for a project inside a parent (often a client), use `Repos/<parent>/<project>/<repo>/Pace repo.md`, with one more folder for each level a project sits below that. For a standalone project use `Repos/<project>/<repo>/Pace repo.md`. Use the projects' names as `1 Projects/` has them, without their numbers: `Website/` for `1 Projects/01. Imaginary Orchard/03. Website/`. For example:
 
 ```text
 Repos/Imaginary Orchard/Website/website-code/Pace repo.md

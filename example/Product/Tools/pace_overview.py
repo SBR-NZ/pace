@@ -1157,7 +1157,7 @@ def one_project_view(folder: Folder, pid: str) -> dict:
             found_rows += record_row(folder, label, item, side, meta)
         lines += rows(found_rows) + ["</section>"]
     places = []
-    documents = folder.pace / entry["folder"] / pr.WORKING_DIR
+    documents = pr.working_dir(folder.pace / entry["folder"])
     try:
         if documents.is_dir():
             places += sorted(pr.rel(folder.pace, path) for path in documents.iterdir() if path.name.lower() not in pr.IGNORED_NAMES)

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import errno
 import hashlib
 import json
 import os
@@ -26,6 +27,7 @@ import stat
 import string
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 try:
@@ -41,6 +43,13 @@ PROJECTS_DIR = "1 Projects"
 RENAMED_FOLDERS = {"Projects": PROJECTS_DIR, "Views": "2 Views", "My add-ins": "3 My add-ins"}
 WORKING_DIR = "Documents"
 ARCHIVE_DIR = "Archive"  # made beside a working file when a first version goes out, never with a project
+# From 3.16.0 the folders in 1 Projects/ are numbered, so each keeps its place as more are added: a project folder
+# starts with its two-digit number, a full stop and a space, such as 02. Budget 2027, from 01 at the top and from 02
+# inside a project, whose Documents/ is 01. Documents/. Pages and chat show a project's name without its number. The
+# full stop keeps a name that starts with digits, such as 24 Hour Fitness or 2026 Tax return, from reading as a number.
+NUMBERED_FOLDER = re.compile(r"([0-9]{2})\. (.+)", re.S)
+DOCUMENTS_NUMBER = 1
+HIGHEST_NUMBER = 99
 PROJECT_FILE = "Pace project.md"
 
 ID = r"[a-z0-9]+(?:-[a-z0-9]+)*"
@@ -788,7 +797,8 @@ def scan_projects(pace: Path):
     holds no project is listed for the owner to ask about, unless it sits inside another such folder; a
     project found behind folders with no id is still read, and reported because the folder around it has
     no id. A folder that cannot be read is named, never taken as empty. Folders whose names start with a
-    dot are left out, and Documents/ is a project's own folder in any case of its name.
+    dot are left out, and Documents/ is a project's own folder in any case of its name, numbered or not.
+    Each project's name is its folder's name without its number.
     """
     base = pace / PROJECTS_DIR
     projects, issues, unlabelled = [], [], []
@@ -814,7 +824,7 @@ def scan_projects(pace: Path):
             return str(path.absolute())
 
     def subfolders(folder: Path):
-        """(folder, key) for each folder inside, without the project's Documents/ in any case of its name;
+        """(folder, key) for each folder inside, without the project's Documents/, numbered or not;
         None when the folder cannot be listed. A link that leads nowhere is left out; a folder that cannot
         be checked comes with no key."""
         try:
@@ -825,7 +835,7 @@ def scan_projects(pace: Path):
             return None
         found = []
         for name in names:
-            if folder != base and name.casefold() == WORKING_DIR.casefold():
+            if folder != base and is_working_dir(name):
                 continue
             path = folder / name
             try:
@@ -864,8 +874,8 @@ def scan_projects(pace: Path):
         if not valid_project_id(pid):
             issues.append({"type": "damaged", "folder": where, "message": f"{where}/{PROJECT_FILE} has no valid id."})
             return None
-        entry = {"id": pid, "name": folder.name, "parent": parent or "", "folder": where,
-                 "created": one(fields, "created"), "purpose": body}
+        entry = {"id": pid, "name": plain_name(folder.name), "number": folder_number(folder.name)[0], "parent": parent or "",
+                 "folder": where, "created": one(fields, "created"), "purpose": body}
         if depth == 1 and parent != NO_PROJECT:
             issues.append({"type": "parent-mismatch", "id": pid, "folder": where,
                            "message": f"Project {pid} sits at the top of {PROJECTS_DIR}/ but names parent {parent!r}."})
@@ -1800,12 +1810,175 @@ def act_location(pace: Path, path: str) -> str:
 
 
 def recorded_path(pace: Path, recorded: str) -> Path:
-    """A path a record wrote, from the Pace folder. One written before 3.11.0 under a folder that has since been
-    numbered, such as Projects/, still finds its file in the numbered folder, so older records never need changing."""
+    """A path a record wrote, from the Pace folder. One written before a folder on it was numbered still finds its file
+    in the numbered folder, so older records never need changing: Projects/ became 1 Projects/ in 3.11.0, and from
+    3.16.0 a project folder or a project's Documents/ may have gained a number, such as 02. Budget 2027/."""
     path = Path(recorded)
     if not path.is_absolute() and path.parts and path.parts[0] in RENAMED_FOLDERS and not (pace / path).exists():
         path = Path(RENAMED_FOLDERS[path.parts[0]], *path.parts[1:])
+    if not path.is_absolute() and path.parts[:1] == (PROJECTS_DIR,) and not (pace / path).exists():
+        path = numbered_path(pace, path) or path
     return (pace / path).resolve()
+
+
+def folder_number(name: str) -> tuple:
+    """(number, name) for a numbered folder, such as (2, "Budget 2027") for 02. Budget 2027; (None, name) otherwise,
+    as for 24 Hour Fitness or 2026 Tax return, whose digits are part of the name."""
+    match = NUMBERED_FOLDER.fullmatch(name)
+    return (int(match.group(1)), match.group(2)) if match else (None, name)
+
+
+def name_key(name: str) -> str:
+    """A folder name for telling whether two folders are the one the owner means: in any letter case, letter by letter
+    as Windows compares names (so Strasse and Straße stay two), and with an accented letter written in either Unicode
+    form, since a file browser shows both the same."""
+    return "".join(char.upper() if len(char.upper()) == 1 else char for char in unicodedata.normalize("NFC", name))
+
+
+def plain_name(name: str) -> str:
+    """A folder's name without its number, as pages and chat show it: Budget 2027 for 02. Budget 2027."""
+    return folder_number(name)[1]
+
+
+def numbered_name(number: int, name: str) -> str:
+    return f"{number:02d}. {name}"
+
+
+def is_working_dir(name: str) -> bool:
+    """True for a project's Documents/: Documents or 01. Documents, in any case. Any other number before Documents, such
+    as 07. Documents or 2024 Documents, makes an ordinary folder."""
+    return name_key(name) in (name_key(WORKING_DIR), name_key(numbered_name(DOCUMENTS_NUMBER, WORKING_DIR)))
+
+
+def documents_like(name: str) -> bool:
+    """True for a name a project cannot have, since its folder would read as a project's Documents/."""
+    return name_key(plain_name(name)) == name_key(WORKING_DIR) or name_key(name) == name_key(WORKING_DIR)
+
+
+def working_dir(project: Path) -> Path:
+    """A project's Documents folder: 01. Documents/, or Documents/ in a project not numbered yet. When it has none, the
+    one a new project gets."""
+    try:
+        with os.scandir(project) as entries:
+            names = sorted(entry.name for entry in entries if is_working_dir(entry.name) and entry.is_dir())
+    except OSError:
+        names = []
+    chosen = [name for name in names if folder_number(name)[0] is not None] or names
+    return project / (chosen[0] if chosen else numbered_name(DOCUMENTS_NUMBER, WORKING_DIR))
+
+
+def free_numbers(level: Path, in_project: bool, here=None):
+    """The numbers new project folders here can take, in order: those after the highest number a project folder here
+    has (and after 01, Documents/, in a project), then, once those run out, the ones below it, never one a folder here
+    already starts with, up to 99. So a folder of the owner's own, such as 99. Archive, keeps its number and holds no
+    one back. Raises OSError when the folder cannot be listed."""
+    if here is None:
+        with os.scandir(level) as entries:
+            here = [(entry.name, entry.is_dir()) for entry in entries]
+    used, projects = set(), [DOCUMENTS_NUMBER] if in_project else []
+    for name, is_dir in here:
+        number = folder_number(name)[0]
+        if number is None or not is_dir:
+            continue
+        used.add(number)
+        try:
+            if (level / name / PROJECT_FILE).exists():
+                projects.append(number)
+        except OSError:
+            pass
+    highest, lowest = max(projects, default=0), DOCUMENTS_NUMBER + 1 if in_project else 1
+    return ([number for number in range(highest + 1, HIGHEST_NUMBER + 1) if number not in used] +
+            [number for number in range(lowest, highest) if number not in used])
+
+
+def next_number(level: Path, in_project: bool):
+    """The number a new project folder here gets, or None when none is left. Raises OSError when it cannot be listed."""
+    numbers = free_numbers(level, in_project)
+    return numbers[0] if numbers else None
+
+
+def redirected(pace: Path, folder: Path) -> bool:
+    """True when a folder is reached through a link or junction below 1 Projects/, or is not inside it at all: renaming
+    it there would rename something else, or something outside Pace. 1 Projects/ itself may be a link."""
+    base = pace / PROJECTS_DIR
+    try:
+        real = os.path.normcase(os.path.realpath(folder))
+        expected = os.path.normcase(os.path.join(os.path.realpath(base), *folder.relative_to(base).parts))
+    except (OSError, ValueError):
+        return True
+    return real != expected
+
+
+def outside_numbering(pace: Path, entry: dict, every: set) -> bool:
+    """True for a project the folders tool leaves as it is by design, so it never waits for a number: one inside a
+    folder that is not a project, such as a repository checkout or a copy of a Pace folder, and one reached through a
+    link or junction. every is the set of project folders found."""
+    around = [parent.as_posix() for parent in Path(entry["folder"]).parents if parent.parts[1:]]
+    return any(parent not in every for parent in around) or redirected(pace, pace / entry["folder"])
+
+
+def numbered_path(pace: Path, path: Path):
+    """The path a record wrote, followed through folders that have since been numbered, such as 1 Projects/Kowhai Books/
+    Documents/a.txt to 1 Projects/01. Kowhai Books/01. Documents/a.txt; None when it leads nowhere, or where more than
+    one numbered folder could be meant. For Documents, the project's own Documents folder is the one; otherwise a
+    project folder comes before an ordinary folder of the same name. A folder still there under the name as written is
+    tried first, and the numbered one when the rest of the path is not inside it, such as an empty folder OneDrive
+    made again under the old name."""
+    parts = path.parts
+
+    def ways(here: Path, part: str) -> list:
+        found = [part] if (here / part).exists() else []
+        try:
+            with os.scandir(here) as entries:
+                fits = [entry.name for entry in entries if entry.name != part and folder_number(entry.name)[0] is not None
+                        and name_key(plain_name(entry.name)) == name_key(part) and entry.is_dir()]
+        except OSError:
+            return found
+        if len(fits) > 1 and is_working_dir(part):
+            fits = [name for name in fits if is_working_dir(name)]
+        if len(fits) > 1:
+            fits = [name for name in fits if (here / name / PROJECT_FILE).is_file()]
+        return found + fits[:1] if len(fits) == 1 else found
+
+    led_nowhere: set = set()
+
+    def follow(here: Path, index: int):
+        if index == len(parts):
+            return []
+        if (here, index) in led_nowhere:
+            return None
+        for name in ways(here, parts[index]):
+            rest = follow(here / name, index + 1)
+            if rest is not None:
+                return [name] + rest
+        led_nowhere.add((here, index))
+        return None
+
+    followed = follow(pace, 0)
+    return Path(*followed) if followed else None
+
+
+def rename_no_replace(source: Path, target: Path) -> None:
+    """Rename, refusing to replace a file or folder already at the target. Windows always refuses; on Linux the kernel
+    is asked to refuse; elsewhere, or where a folder cannot do that, the target is looked for just before."""
+    if os.name != "nt" and sys.platform.startswith("linux"):
+        try:
+            import ctypes  # some Python builds have no ctypes; then the target is looked for just before
+            renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
+        except (ImportError, OSError, AttributeError):
+            renameat2 = None
+        if renameat2 is not None:
+            renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            renameat2.restype = ctypes.c_int
+            here = -100  # AT_FDCWD
+            if renameat2(here, os.fsencode(str(source)), here, os.fsencode(str(target)), 1) == 0:  # RENAME_NOREPLACE
+                return
+            failed = ctypes.get_errno()
+            if failed not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP):
+                raise OSError(failed, os.strerror(failed), str(target))
+    if os.name != "nt" and os.path.lexists(target):
+        raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(target))
+    os.rename(source, target)  # on Windows this refuses an existing target itself
 
 
 def has_content(folder: Path) -> bool:
@@ -2021,7 +2194,8 @@ BAD_FOLDER = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 # or save a file whose full path is longer than 218 characters (Microsoft KB 213983), and other Office and
 # Windows tools stop at about 260.
 EXCEL_PATH_LIMIT = 218
-ROOM_FOR_FILES = 100   # a folder in Documents/, Archive/ and a long dated file name
+WINDOWS_PATH_LIMIT = 260  # MAX_PATH, which counts the null ending a path: 260 characters or more is too long
+ROOM_FOR_FILES = 100   # a folder in 01. Documents/, Archive/ and a long dated file name
 TYPICAL_ROOT = 60      # a Pace folder in OneDrive, such as C:\Users\<name>\OneDrive - <Company>\PACE\
 
 
@@ -2034,17 +2208,17 @@ def path_room(pace: Path, folder: Path) -> int:
         here = len(str(pace.resolve())) + 1
     except OSError:
         here = 0
-    return EXCEL_PATH_LIMIT - max(here, TYPICAL_ROOT) - len(rel(pace, folder / WORKING_DIR)) - 1
+    return EXCEL_PATH_LIMIT - max(here, TYPICAL_ROOT) - len(rel(pace, working_dir(folder))) - 1
 
 
 def path_note(pace: Path, folder: Path) -> tuple:
     room = path_room(pace, folder)
     if room >= ROOM_FOR_FILES:
         return room, ""
-    return room, (f" Long path: inside {WORKING_DIR}/ there is room for about {max(room, 0)} more characters of folder and "
-                  f"file names before Excel's {EXCEL_PATH_LIMIT}-character path limit, counting a Pace folder kept in OneDrive. "
-                  "A shorter folder name here, or on a project above it, leaves more room; a project folder can be renamed "
-                  "at any time, since its id does not change.")
+    return room, (f" Long path: inside {working_dir(folder).name}/ there is room for about {max(room, 0)} more characters "
+                  f"of folder and file names before Excel's {EXCEL_PATH_LIMIT}-character path limit, counting a Pace folder "
+                  "kept in OneDrive. A shorter folder name here, or on a project above it, leaves more room; a project "
+                  "folder can be renamed at any time, keeping its number, since its id does not change.")
 
 
 def cmd_project_new(args) -> tuple:
@@ -2053,15 +2227,20 @@ def cmd_project_new(args) -> tuple:
     if not valid_project_id(pid):
         return result("not-saved", f"Not saved: {pid!r} is not a usable project id (lowercase letters, digits and single hyphens, up to {MAX_ID} characters, not 'none').", False)
     if (not name or BAD_FOLDER.search(name) or name.endswith((".", " ")) or name.startswith(".")
-            or name.casefold() == WORKING_DIR.casefold()):
+            or documents_like(name)):
         return result("not-saved", f"Not saved: {name!r} cannot be used as a folder name.", False)
+    if folder_number(name)[0] is not None:
+        return result("not-saved", f"Not saved: {name!r} starts as a numbered folder does, with two digits, a full stop and "
+                      f"a space, so they would be read as its number. Give the name without a number, such as "
+                      f"{plain_name(name)!r}: the folder is numbered for it. If the digits are part of the name, write it "
+                      f"another way, such as {name[:2] + ' ' + name[4:]!r}. Nothing was created.", False)
     if not args.by:
         return result("not-saved", "Not saved: --by (who is creating the project) is needed.", False)
     folders, seen = [], set()
     for given in args.folder or []:
         folder_name = (given or "").strip()
         if not folder_name or BAD_FOLDER.search(folder_name) or folder_name.endswith((".", " ")) or folder_name in (".", ".."):
-            return result("not-saved", f"Not saved: {folder_name!r} cannot be used as a folder name inside {WORKING_DIR}/. Nothing was created.", False)
+            return result("not-saved", f"Not saved: {folder_name!r} cannot be used as a folder name inside the project's Documents folder. Nothing was created.", False)
         if folder_name.casefold() == ARCHIVE_DIR.casefold():
             return result("not-saved", f"Not saved: {ARCHIVE_DIR}/ is not made with a project. It appears beside a working file when its "
                                        "first version goes out. Nothing was created.", False)
@@ -2079,12 +2258,31 @@ def cmd_project_new(args) -> tuple:
     for entry in projects:
         by_id.setdefault(entry["id"], []).append(entry)
     if parent == NO_PROJECT:
-        folder = base / name
+        level = base
     else:
         parents = by_id.get(parent, [])
         if len(parents) != 1:
             return result("not-saved", f"Not saved: parent {parent} {'is not defined' if not parents else 'is defined more than once'} under {PROJECTS_DIR}/.", False)
-        folder = pace / parents[0]["folder"] / name
+        level = pace / parents[0]["folder"]
+    # The folder is numbered after the others beside it. A folder already there with this name, numbered or not, is
+    # used instead: this project when the command is repeated, or a folder the owner is making a project of.
+    key = name_key(name)
+    try:
+        with os.scandir(level) as entries:
+            same = [entry.name for entry in entries if (name_key(entry.name) == key or (
+                folder_number(entry.name)[0] is not None and name_key(plain_name(entry.name)) == key)) and entry.is_dir()]
+        number = next_number(level, parent != NO_PROJECT)
+    except OSError as error:
+        return result("not-saved", f"Not saved: {rel(pace, level)}/ could not be read ({error}). Nothing was created.", False)
+    if len(same) > 1:
+        return result("not-saved", f"Not saved: {rel(pace, level)}/ already has {len(same)} folders named {name}: "
+                      f"{', '.join(sorted(same))}. Ask the owner which is the project. Nothing was created.", False)
+    if not same and number is None:
+        return result("not-saved", f"Not saved: every number from 01 to {HIGHEST_NUMBER} is taken in {rel(pace, level)}/. "
+                      "Ask the owner which project this one belongs inside, and make it there with --parent; or free a "
+                      "number there by hand, such as by taking the number off a folder of the owner's own that is not a "
+                      "project. Nothing was created.", False)
+    folder = level / (same[0] if same else numbered_name(number, name))
     where = rel(pace, folder)
     id_path = folder / PROJECT_FILE
     if id_path.exists():
@@ -2099,7 +2297,7 @@ def cmd_project_new(args) -> tuple:
                               id=pid, folder=where, path_room=room)
             made, missed = make_project_folders(folder, folders)
             return result("already-saved", f"Already saved: {where} is project {pid}; its project file was not written again. "
-                          + folders_message(where, made, missed) + note, not missed, id=pid, folder=where, folders=made,
+                          + folders_message(where, made, missed, folder) + note, not missed, id=pid, folder=where, folders=made,
                           path_room=room, **({"folders_not_made": missed} if missed else {}))
         return result("conflict", f"Conflict: {where} already has a different project identity. Nothing was overwritten.", False, folder=where)
     if pid in by_id:
@@ -2115,7 +2313,7 @@ def cmd_project_new(args) -> tuple:
                       False, problems=unreadable)
     try:
         folder.mkdir(parents=False, exist_ok=True)
-        (folder / WORKING_DIR).mkdir(exist_ok=True)
+        working_dir(folder).mkdir(exist_ok=True)
         # Record/ shows whether this Pace folder keeps temporary files; the new folder cannot.
         outcome = place_new(id_path, data, direct=holds_temp_file(pace / RECORD_DIR))
     except PartialPlacement as error:
@@ -2136,10 +2334,10 @@ def cmd_project_new(args) -> tuple:
                       False, id=pid, folder=where, placed=True)
     room, note = path_note(pace, folder)
     if not folders:
-        return result("saved", f"Saved and read back: project {pid} in {where} (with {WORKING_DIR}/). {CLOUD_NOTE}{note}",
+        return result("saved", f"Saved and read back: project {pid} in {where} (with {working_dir(folder).name}/). {CLOUD_NOTE}{note}",
                       True, id=pid, folder=where, parent=parent, path_room=room)
     made, missed = make_project_folders(folder, folders)
-    return result("saved", f"Saved and read back: project {pid} in {where} (with {WORKING_DIR}/). " + folders_message(where, made, missed)
+    return result("saved", f"Saved and read back: project {pid} in {where} (with {working_dir(folder).name}/). " + folders_message(where, made, missed, folder)
                   + f" {CLOUD_NOTE}{note}", True, id=pid, folder=where, parent=parent, folders=made, path_room=room,
                   **({"folders_not_made": missed} if missed else {}))
 
@@ -2147,8 +2345,9 @@ def cmd_project_new(args) -> tuple:
 def make_project_folders(folder: Path, names: list) -> tuple:
     """Make each named folder inside the project's Documents/ and check it is there. Returns (made, missed)."""
     made, missed = [], []
+    documents = working_dir(folder)
     for name in names:
-        path = folder / WORKING_DIR / name
+        path = documents / name
         try:
             path.mkdir(exist_ok=True)
         except OSError as error:
@@ -2158,12 +2357,12 @@ def make_project_folders(folder: Path, names: list) -> tuple:
     return made, missed
 
 
-def folders_message(where: str, made: list, missed: list) -> str:
-    said = []
+def folders_message(where: str, made: list, missed: list, folder: Path) -> str:
+    said, documents = [], working_dir(folder).name
     if made:
-        said.append(f"Folders inside {WORKING_DIR}/, each checked: {', '.join(name + '/' for name in made)}.")
+        said.append(f"Folders inside {documents}/, each checked: {', '.join(name + '/' for name in made)}.")
     if missed:
-        said.append(f"Not made in {where}/{WORKING_DIR}/: {', '.join(missed)}. Make them by hand or try again.")
+        said.append(f"Not made in {where}/{documents}/: {', '.join(missed)}. Make them by hand or try again.")
     return " ".join(said)
 
 

@@ -21,9 +21,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import errno
 import importlib.util
-import os
 import sys
 from pathlib import Path
 
@@ -146,27 +144,7 @@ def preview(args) -> tuple:
                      months={month: len(entries) for month, entries in sorted(by_month(moves).items())}, **details)
 
 
-def _rename_no_replace(source: Path, target: Path) -> None:
-    """Rename, refusing to replace a file already at the target. Windows always refuses; on Linux the kernel is asked
-    to refuse; elsewhere, or where a folder cannot do that, the target is looked for just before."""
-    if os.name != "nt" and sys.platform.startswith("linux"):
-        try:
-            import ctypes  # some Python builds have no ctypes; then the target is looked for just before
-            renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
-        except (ImportError, OSError, AttributeError):
-            renameat2 = None
-        if renameat2 is not None:
-            renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-            renameat2.restype = ctypes.c_int
-            here = -100  # AT_FDCWD
-            if renameat2(here, os.fsencode(str(source)), here, os.fsencode(str(target)), 1) == 0:  # RENAME_NOREPLACE
-                return
-            failed = ctypes.get_errno()
-            if failed not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP):
-                raise OSError(failed, os.strerror(failed), str(target))
-    if os.name != "nt" and os.path.lexists(target):
-        raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(target))
-    os.rename(source, target)  # on Windows this refuses an existing target itself
+_rename_no_replace = pr.rename_no_replace  # the record tool's rename, never over a file already there
 
 
 def move_one(record_dir: Path, move: dict) -> str:

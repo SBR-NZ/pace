@@ -37,6 +37,7 @@ def _load(name: str):
 po = _load("pace_overview")
 pr = po.pr
 pu = _load("pace_update")
+pf = _load("pace_folders")
 
 LEVELS = ("problem", "warning", "note")
 OWNER_ADDINS = pu.OWNER_ADDINS
@@ -601,8 +602,9 @@ def check_projects(pace: Path, found: Findings, folder) -> list:
     if unlabelled:
         found.add("warning", "projects", f"{plural(len(unlabelled), 'folder')} in {pr.PROJECTS_DIR}/ "
                   f"{'has' if len(unlabelled) == 1 else 'have'} no Pace project.md: {listed(unlabelled)}.",
-                  "Ask the owner what each one is: make it a project, or move it into a project's Documents/, as projects "
-                  "help describes.", files=unlabelled)
+                  "Ask the owner what each one is: make it a project, or move it into a project's Documents folder, as "
+                  "projects help describes.", files=unlabelled)
+    check_numbers(pace, found, projects)
     if folder is not None:
         known = {entry["id"] for entry in projects}
         used: dict = {}
@@ -625,6 +627,61 @@ def check_projects(pace: Path, found: Findings, folder) -> list:
                           "help describes.", requests=requests)
     found.checked.append(f"{pr.PROJECTS_DIR}/: {plural(len(projects), 'project')}.")
     return projects
+
+
+def check_numbers(pace: Path, found: Findings, projects: list) -> None:
+    """From 3.16.0 the folders in 1 Projects/ are numbered: say what the folders tool would number still, and what it
+    cannot until the owner sorts it out, from the tool's own plan, and when a project has two Documents folders, which
+    leaves its files in two places."""
+    doubled = []
+    every = {entry["folder"] for entry in projects}
+    for entry in projects:
+        if pr.outside_numbering(pace, entry, every):
+            continue  # left as it is, such as a project in a repository checkout
+        try:
+            with os.scandir(pace / entry["folder"]) as listing:
+                documents = sorted(item.name for item in listing if pr.is_working_dir(item.name) and item.is_dir())
+        except OSError:
+            continue
+        if len(documents) > 1:
+            doubled.append((entry["folder"], documents))
+    for where, documents in doubled:
+        keep = pr.working_dir(pace / where).name
+        found.add("warning", "projects", f"{where}/ has {len(documents)} Documents folders: {listed(name + '/' for name in documents)}, "
+                  "so its files are in more than one place.", f"With the owner's yes, move each file into {keep}/, the one "
+                  "the tools use, never over a file of the same name: where both folders hold one, ask the owner which to "
+                  "keep. Then remove the emptied folder.", files=[where])
+    plan = pf.make_plan(pace)
+    if plan["blocked"]:
+        return  # the folders and projects checks say what to do first
+    waiting = sorted(rename["from"] for rename in plan["renames"])
+    count = len(waiting) + plan["more"]
+    more = " Not every folder was looked into, so there may be more." if plan["not_all_seen"] else ""
+    if count:
+        one = count == 1
+        found.add("note", "folder-numbers", f"{plural(count, 'folder')} in {pr.PROJECTS_DIR}/ {'is' if one else 'are'} not "
+                  f"numbered yet, so new projects, which are, sort above {'it' if one else 'them'}: "
+                  f"{', '.join(waiting[:5])}{f' and {count - len(waiting[:5])} more' if count > len(waiting[:5]) else ''}."
+                  f"{more}",
+                  "Number them with the folders tool on the owner's yes, as projects help describes under Numbered "
+                  "folders. Close any file open from them and let OneDrive finish syncing first.", files=waiting[:10])
+    if plan["held"]:
+        one = len(plan["held"]) == 1
+        steps = []
+        if set(plan["held"]) - set(plan["full"]) - set(plan["unwritable"]):
+            steps.append("where a folder beside it would have the same name once numbered, or one is already there under "
+                         "its new name, rename one of them")
+        if plan["unwritable"]:
+            steps.append("where a folder's name is not valid text or holds a line break or another control character, "
+                         "rename it")
+        if plan["full"]:
+            steps.append("where every number from 01 to 99 is taken, free one by hand, such as by taking the number off a "
+                         "folder of the owner's own that is not a project, or leave the folder as it is, listed after the "
+                         "numbered ones")
+        found.add("note", "folder-numbers", f"{plural(len(plan['held']), 'folder')} in {pr.PROJECTS_DIR}/ cannot be numbered "
+                  f"until the owner sorts {'it' if one else 'them'} out: {listed(plan['held'], 5)}.",
+                  "The folders tool's preview says why for each. With the owner's yes, " + "; and ".join(steps) +
+                  ". Then number the rest with the folders tool.", files=plan["held"][:10])
 
 
 REFERENCE_NAMES = ("Pace repo.md", "Pace repo link.md")
@@ -691,15 +748,20 @@ def check_repos(pace: Path, found: Findings, projects: list) -> None:
                           "Check the id against the project's Pace project.md.")
         entry = known.get(own)
         if entry:
-            expected = Path(entry["folder"]).relative_to(pr.PROJECTS_DIR)
+            # Repos/ mirrors the projects' names; a folder's number in 1 Projects/ makes no difference to its place,
+            # and a Repos/ folder may carry the number too.
+            expected = [pr.name_key(pr.plain_name(part)) for part in Path(entry["folder"]).relative_to(pr.PROJECTS_DIR).parts]
             try:
                 place = path.parent.parent.relative_to(base) if path.parent != base else None
             except ValueError:
                 place = None
-            if place != expected:
-                found.add("note", "repos", f"{where} is not in its project's place: Repos/ mirrors {pr.PROJECTS_DIR}/, so "
-                          f"it belongs in a folder of its own under Repos/{expected.as_posix()}/.", "Move it there when the "
-                          "owner agrees; the project id keeps it linked either way.")
+            fits = place is not None and expected in ([pr.name_key(part) for part in place.parts],
+                                                      [pr.name_key(pr.plain_name(part)) for part in place.parts])
+            expected = Path(*[pr.plain_name(part) for part in Path(entry["folder"]).relative_to(pr.PROJECTS_DIR).parts])
+            if not fits:
+                found.add("note", "repos", f"{where} is not in its project's place: Repos/ mirrors {pr.PROJECTS_DIR}/ by the "
+                          f"projects' names, so it belongs in a folder of its own under Repos/{expected.as_posix()}/.",
+                          "Move it there when the owner agrees; the project id keeps it linked either way.")
     if count:
         found.checked.append(f"Repos/: {plural(count, 'repository reference')}.")
 

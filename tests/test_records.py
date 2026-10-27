@@ -37,6 +37,11 @@ _spec.loader.exec_module(pr)
 CLIENT = "kowhai-books"
 BUDGET = "kowhai-budget"
 GARDEN = "garden-plans"
+# The folders project-new makes for them: numbered, in the order they are made, from 3.16.0.
+CLIENT_DIR = "1 Projects/01. Kowhai Books"
+BUDGET_DIR = f"{CLIENT_DIR}/02. Budget 2027"
+GARDEN_DIR = "1 Projects/02. Garden plans"
+DOCS = "01. Documents"
 NZ = "+13:00"
 
 
@@ -232,7 +237,7 @@ class SavingTests(PaceFolder):
         self.assertEqual(self.record_files(), [])
 
     def test_extra_fields_and_source_files_are_kept(self):
-        source = self.pace / "1 Projects/Kowhai Books/Budget 2027/Documents/September pack.txt"
+        source = self.pace / BUDGET_DIR / DOCS / "September pack.txt"
         source.write_text("Invented September pack: sales 41,200.\n", encoding="utf-8")
         request, out, _ = self.save(kind="figure", origin="source", words=None, subjects=("Sales",),
                                     body="Sales for September as shown in the pack.",
@@ -243,7 +248,7 @@ class SavingTests(PaceFolder):
         read, _ = self.run_tool("read", "--request", request)
         fields = read["record"]["fields"]
         self.assertEqual(fields["later-field"], ["kept as is"])
-        expected = f"1 Projects/Kowhai Books/Budget 2027/Documents/September pack.txt sha256:{pr.sha256(source.read_bytes())}"
+        expected = f"{BUDGET_DIR}/{DOCS}/September pack.txt sha256:{pr.sha256(source.read_bytes())}"
         self.assertEqual(fields["source"], [expected])
 
     def test_spec_file_gives_the_same_record(self):
@@ -377,7 +382,8 @@ class CreateOnlyHostTests(PaceFolder):
             out, code = self.run_tool("project-new", "--id", "harbour-walk", "--name", "Harbour walk", "--by", "Test agent")
         self.assertEqual((out["status"], code), ("saved", 0), out)
         self.assertNotIn("kept_temp_files", out)
-        self.assertEqual(self.temp_files(self.pace / "1 Projects/Harbour walk"), [])
+        self.assertEqual(self.temp_files(self.pace / out["folder"]), [])
+        self.assertEqual(out["folder"], "1 Projects/03. Harbour walk")
 
     def test_a_failed_save_still_names_the_temporary_file_it_could_not_delete(self):
         with self.no_delete(), mock.patch("os.fsync", side_effect=OSError(28, "No space left on device")):
@@ -856,10 +862,11 @@ class ProjectTests(PaceFolder):
         self.assertEqual((out["status"], code), ("listed", 0))
         by_id = {p["id"]: p for p in out["projects"]}
         self.assertEqual(by_id[BUDGET]["parent"], CLIENT)
-        self.assertEqual(by_id[BUDGET]["folder"], "1 Projects/Kowhai Books/Budget 2027")
+        self.assertEqual(by_id[BUDGET]["folder"], BUDGET_DIR)
+        self.assertEqual((by_id[BUDGET]["name"], by_id[BUDGET]["number"]), ("Budget 2027", 2))
         self.assertEqual(by_id[GARDEN]["parent"], "none")
         for project in by_id.values():
-            self.assertTrue((self.pace / project["folder"] / "Documents").is_dir())
+            self.assertTrue((self.pace / project["folder"] / DOCS).is_dir())
 
     def test_retry_and_refusals(self):
         out, code = self.run_tool("project-new", "--id", BUDGET, "--name", "Budget 2027", "--parent", CLIENT, "--by", "Test agent")
@@ -875,13 +882,13 @@ class ProjectTests(PaceFolder):
             with self.subTest(label):
                 out, code = self.run_tool("project-new", *args, "--by", "Test agent")
                 self.assertEqual((out["status"], code), ("not-saved", 1), out)
-        self.assertFalse((self.pace / "1 Projects/Kowhai Books/Another budget").exists())
+        self.assertFalse(list((self.pace / CLIENT_DIR).glob("*Another budget")))
 
     def test_projects_can_sit_inside_projects_at_any_depth(self):
         out, code = self.run_tool("project-new", "--id", "kowhai-board-pack", "--name", "Board pack", "--parent", BUDGET,
                                   "--by", "Test agent")
         self.assertEqual((out["status"], code), ("saved", 0), out)
-        self.assertEqual(out["folder"], "1 Projects/Kowhai Books/Budget 2027/Board pack")
+        self.assertEqual(out["folder"], f"{BUDGET_DIR}/02. Board pack")
         out, code = self.run_tool("project-new", "--id", "kowhai-slides", "--name", "Slides", "--parent", "kowhai-board-pack",
                                   "--by", "Test agent")
         self.assertEqual((out["status"], code), ("saved", 0), out)
@@ -889,8 +896,8 @@ class ProjectTests(PaceFolder):
         self.assertEqual((listed["status"], code), ("listed", 0), listed)
         by_id = {p["id"]: p for p in listed["projects"]}
         self.assertEqual(by_id["kowhai-slides"]["parent"], "kowhai-board-pack")
-        self.assertEqual(by_id["kowhai-slides"]["folder"], "1 Projects/Kowhai Books/Budget 2027/Board pack/Slides")
-        self.assertTrue((self.pace / by_id["kowhai-slides"]["folder"] / "Documents").is_dir())
+        self.assertEqual(by_id["kowhai-slides"]["folder"], f"{BUDGET_DIR}/02. Board pack/02. Slides")
+        self.assertTrue((self.pace / by_id["kowhai-slides"]["folder"] / DOCS).is_dir())
         self.assertEqual(listed["folders_without_id"], [])
         # A retry at depth is already saved, and records for the deepest project save like any other.
         again, code = self.run_tool("project-new", "--id", "kowhai-slides", "--name", "Slides", "--parent", "kowhai-board-pack",
@@ -906,14 +913,15 @@ class ProjectTests(PaceFolder):
         self.assertLess(out["path_room"], pr.ROOM_FOR_FILES)
         self.assertIn("Long path:", out["message"])
         self.assertIn("218-character path limit", out["message"])
-        self.assertTrue((self.pace / "1 Projects/Kowhai Books/Budget 2027" / name / "Documents").is_dir())
+        self.assertTrue((self.pace / BUDGET_DIR / f"02. {name}" / DOCS).is_dir())
         short, _ = self.run_tool("project-new", "--id", "short-one", "--name", "Short", "--by", "Test agent")
         self.assertGreaterEqual(short["path_room"], pr.ROOM_FOR_FILES)
         self.assertNotIn("Long path:", short["message"])
         # The Pace folder's own place counts as at least a typical OneDrive place, wherever the tool runs:
-        # 218 - 100 for the place - 26 for 1 Projects/Short/Documents - 1 for the separator.
+        # 218 - 100 for the place - 34 for 1 Projects/03. Short/01. Documents - 1 for the separator.
+        self.assertEqual(short["folder"], "1 Projects/03. Short")
         with mock.patch.object(pr, "TYPICAL_ROOT", 100):
-            self.assertEqual(pr.path_room(self.pace, self.pace / "1 Projects/Short"), 91)
+            self.assertEqual(pr.path_room(self.pace, self.pace / short["folder"]), 83)
 
     def test_a_project_named_documents_in_any_case_is_refused(self):
         for name in ("Documents", "documents", "DOCUMENTS"):
@@ -922,13 +930,14 @@ class ProjectTests(PaceFolder):
                 self.assertEqual((out["status"], code), ("not-saved", 1), out)
 
     def test_folders_deep_down_are_read_and_raised(self):
-        loose = self.pace / "1 Projects/Kowhai Books/Budget 2027/Loose notes"
+        loose = self.pace / BUDGET_DIR / "Loose notes"
         (loose / "Inside loose").mkdir(parents=True)
-        inner = self.pace / "1 Projects/Kowhai Books/Budget 2027/Holder/Inner"
+        inner = self.pace / BUDGET_DIR / "Holder/Inner"
         inner.mkdir(parents=True)
-        (self.pace / "1 Projects/Kowhai Books/Budget 2027/Holder/Beside").mkdir()
-        (self.pace / "1 Projects/Kowhai Books/Budget 2027/.hidden").mkdir()
-        (self.pace / "1 Projects/Kowhai Books/Budget 2027/documents/kept").mkdir(parents=True)
+        (self.pace / BUDGET_DIR / "Holder/Beside").mkdir()
+        (self.pace / BUDGET_DIR / ".hidden").mkdir()
+        (self.pace / BUDGET_DIR / "documents/kept").mkdir(parents=True)
+        (self.pace / BUDGET_DIR / "07. DOCUMENTS/kept").mkdir(parents=True)
         (inner / "Pace project.md").write_text(
             "---\nformat: project-1\nid: inner\nparent: kowhai-budget\ncreated: 2026-10-23T11:20:00+13:00\nby: Hand\n---\n",
             encoding="utf-8")
@@ -936,17 +945,18 @@ class ProjectTests(PaceFolder):
         self.assertEqual((out["status"], code), ("issues", 1))
         # Named: a folder with no id that holds no project, and one beside a project inside a folder with no id.
         # Not named: what is inside a named folder, a folder that holds a project, dot folders and Documents/ in any case.
-        self.assertEqual(sorted(out["folders_without_id"]), ["1 Projects/Kowhai Books/Budget 2027/Holder/Beside",
-                                                             "1 Projects/Kowhai Books/Budget 2027/Loose notes"])
+        # 07. DOCUMENTS is an ordinary folder: only Documents or 01. Documents is a project's own.
+        self.assertEqual(sorted(out["folders_without_id"]), [f"{BUDGET_DIR}/07. DOCUMENTS", f"{BUDGET_DIR}/Holder/Beside",
+                                                             f"{BUDGET_DIR}/Loose notes"])
         found = next(p for p in out["projects"] if p["id"] == "inner")
-        self.assertEqual(found["folder"], "1 Projects/Kowhai Books/Budget 2027/Holder/Inner")
+        self.assertEqual(found["folder"], f"{BUDGET_DIR}/Holder/Inner")
         mismatch = [i["message"] for i in out["issues"] if i.get("id") == "inner"]
         self.assertEqual(mismatch, ["Project inner sits inside Holder, which has no Pace project id."])
 
     def test_a_folder_that_cannot_be_read_is_named_and_stops_nothing(self):
-        locked = self.pace / "1 Projects/Kowhai Books/Budget 2027/Claude/locked"
+        locked = self.pace / BUDGET_DIR / "Claude/locked"
         locked.mkdir(parents=True)
-        unlisted = self.pace / "1 Projects/Garden plans/Shut"
+        unlisted = self.pace / GARDEN_DIR / "Shut"
         unlisted.mkdir()
         real_exists, real_scandir = Path.exists, os.scandir
 
@@ -965,8 +975,8 @@ class ProjectTests(PaceFolder):
             self.assertEqual((out["status"], code), ("issues", 1), out)
             self.assertEqual(sorted(p["id"] for p in out["projects"]), sorted([CLIENT, BUDGET, GARDEN]))
             unreadable = sorted(i["folder"] for i in out["issues"] if i["type"] == "unreadable")
-            self.assertEqual(unreadable, ["1 Projects/Garden plans/Shut", "1 Projects/Kowhai Books/Budget 2027/Claude/locked"])
-            self.assertNotIn("1 Projects/Garden plans/Shut", out["folders_without_id"])  # it may hold a project
+            self.assertEqual(unreadable, [f"{BUDGET_DIR}/Claude/locked", f"{GARDEN_DIR}/Shut"])
+            self.assertNotIn(f"{GARDEN_DIR}/Shut", out["folders_without_id"])  # it may hold a project
             _, saved, code = self.save()
             self.assertEqual((saved["status"], code), ("saved", 0), saved)
 
@@ -987,22 +997,23 @@ class ProjectTests(PaceFolder):
     def test_a_big_folder_with_no_id_does_not_hide_the_projects_after_it(self):
         out, _ = self.run_tool("project-new", "--id", "aardvark", "--name", "Aardvark", "--by", "Test agent")
         self.assertEqual(out["status"], "saved", out)
-        code = self.pace / "1 Projects/Aardvark/Code"
+        code = self.pace / out["folder"] / "Code"
+        self.assertEqual(out["folder"], "1 Projects/03. Aardvark")
         for outer in range(30):
             for inner in range(20):
                 (code / f"pkg{outer:02d}" / f"mod{inner:02d}").mkdir(parents=True)
         out, code_ = self.run_tool("projects")
         self.assertEqual(sorted(p["id"] for p in out["projects"]), sorted(["aardvark", CLIENT, BUDGET, GARDEN]))
         capped = [i for i in out["issues"] if i["type"] == "too-many-folders"]
-        self.assertEqual([i["folder"] for i in capped], ["1 Projects/Aardvark/Code"])
-        self.assertNotIn("1 Projects/Aardvark/Code", out["folders_without_id"])  # not all of it was checked
+        self.assertEqual([i["folder"] for i in capped], ["1 Projects/03. Aardvark/Code"])
+        self.assertNotIn("1 Projects/03. Aardvark/Code", out["folders_without_id"])  # not all of it was checked
         _, saved, status = self.save()
         self.assertEqual((saved["status"], status), ("saved", 0), saved)
         again, status = self.run_tool("project-new", "--id", BUDGET, "--name", "Another budget", "--by", "Test agent")
         self.assertEqual((again["status"], status), ("not-saved", 1), again)
 
     def test_folders_too_far_down_are_named_not_followed(self):
-        chain = self.pace / "1 Projects/Garden plans" / "/".join(["deep"] * 6)
+        chain = self.pace / GARDEN_DIR / "/".join(["deep"] * 6)
         chain.mkdir(parents=True)
         with mock.patch.object(pr, "MAX_PROJECT_DEPTH", 4):
             out, code = self.run_tool("projects")
@@ -1015,7 +1026,7 @@ class ProjectTests(PaceFolder):
         (dotted / "Pace project.md").write_text(
             "---\nformat: project-1\nid: net-old\nparent: none\ncreated: 2026-10-23T11:20:00+13:00\nby: Hand\n---\n",
             encoding="utf-8")
-        (self.pace / "1 Projects/Kowhai Books/.git/objects").mkdir(parents=True)  # a system folder, left out
+        (self.pace / CLIENT_DIR / ".git/objects").mkdir(parents=True)  # a system folder, left out
         out, _ = self.run_tool("projects")
         self.assertIn("net-old", {p["id"] for p in out["projects"]})
         self.assertEqual(out["folders_without_id"], [])
@@ -1025,7 +1036,7 @@ class ProjectTests(PaceFolder):
         self.assertEqual((dot["status"], code), ("not-saved", 1), dot)
 
     def test_all_the_folders_with_no_id_together_are_limited_too(self):
-        for project in ("1 Projects/Kowhai Books", "1 Projects/Garden plans"):
+        for project in (CLIENT_DIR, GARDEN_DIR):
             for number in range(4):
                 (self.pace / project / f"Loose {number}").mkdir()
         with mock.patch.object(pr, "MAX_UNNAMED_FOLDERS", 5):
@@ -1035,10 +1046,10 @@ class ProjectTests(PaceFolder):
         self.assertEqual([i["type"] for i in out["issues"]], ["too-many-folders"])
 
     def test_a_link_back_up_is_stopped_and_a_link_across_shows_the_project_twice(self):
-        budget = self.pace / "1 Projects/Kowhai Books/Budget 2027"
+        budget = self.pace / BUDGET_DIR
         try:
-            (budget / "Up").symlink_to(self.pace / "1 Projects/Kowhai Books", target_is_directory=True)
-            (self.pace / "1 Projects/Garden plans/Across").symlink_to(budget, target_is_directory=True)
+            (budget / "Up").symlink_to(self.pace / CLIENT_DIR, target_is_directory=True)
+            (self.pace / GARDEN_DIR / "Across").symlink_to(budget, target_is_directory=True)
         except (OSError, NotImplementedError):
             self.skipTest("folder links cannot be made here")
         out, _ = self.run_tool("projects")
@@ -1046,7 +1057,7 @@ class ProjectTests(PaceFolder):
         self.assertIn("folder-loop", types)
         self.assertIn("duplicate-id", types)  # Budget 2027 is reached at its own place and through the link
         self.assertEqual(sorted(p["folder"] for p in out["projects"] if p["id"] == BUDGET),
-                         ["1 Projects/Garden plans/Across", "1 Projects/Kowhai Books/Budget 2027"])
+                         [BUDGET_DIR, f"{GARDEN_DIR}/Across"])
 
     def test_a_project_value_line_of_three_hyphens_is_not_saved(self):
         # It used to save a Pace project.md whose header ended early, so by and the purpose read back wrong.
@@ -1054,11 +1065,11 @@ class ProjectTests(PaceFolder):
                                   "--by", "Test agent\n---\nSecond line")
         self.assertEqual((out["status"], code), ("not-saved", 1), out)
         self.assertIn("by has a line that is just '---'", out["message"])
-        self.assertFalse((self.pace / "1 Projects/Agenda").exists())
+        self.assertFalse(list((self.pace / "1 Projects").glob("*Agenda")))
 
     def test_renaming_a_folder_keeps_the_id_and_its_records(self):
         request, _, _ = self.save()
-        (self.pace / "1 Projects/Kowhai Books/Budget 2027").rename(self.pace / "1 Projects/Kowhai Books/Budget FY27")
+        (self.pace / BUDGET_DIR).rename(self.pace / CLIENT_DIR / "02. Budget FY27")
         out, _ = self.run_tool("projects")
         names = {p["id"]: p["name"] for p in out["projects"]}
         self.assertEqual(names[BUDGET], "Budget FY27")
@@ -1069,8 +1080,8 @@ class ProjectTests(PaceFolder):
     def test_hand_made_mistakes_are_reported(self):
         clash = self.pace / "1 Projects/Garden copy"
         clash.mkdir()
-        shutil.copy(self.pace / "1 Projects/Garden plans/Pace project.md", clash / "Pace project.md")
-        stray = self.pace / "1 Projects/Garden plans/Misfiled"
+        shutil.copy(self.pace / GARDEN_DIR / "Pace project.md", clash / "Pace project.md")
+        stray = self.pace / GARDEN_DIR / "Misfiled"
         stray.mkdir()
         (stray / "Pace project.md").write_text(
             "---\nformat: project-1\nid: misfiled\nparent: kowhai-books\ncreated: 2026-10-23T11:20:00+13:00\nby: Hand\n---\n",
@@ -1245,7 +1256,7 @@ class HelpAndToolAgreeTests(unittest.TestCase):
             run = subprocess.run(command + ["project-new", "--id", "first", "--name", "First project", "--by", "Test agent"],
                                  capture_output=True, text=True, cwd=tmp, env=env)
             self.assertEqual(json.loads(run.stdout)["status"], "saved", run.stdout + run.stderr)
-            self.assertTrue((copy / "1 Projects/First project/Pace project.md").is_file())
+            self.assertTrue((copy / "1 Projects/01. First project/Pace project.md").is_file())
             request = json.loads(subprocess.run(command + ["new-request", "--project", "first"], capture_output=True,
                                                 text=True, cwd=tmp, env=env).stdout)["request"]
             run = subprocess.run(command + ["create", "--request", request, "--project", "first", "--kind", "note",

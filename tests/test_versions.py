@@ -31,7 +31,7 @@ def pace_md_rule(root):
     """The working-file sentence on the Projects line of a Pace.md."""
     text = (root / "Pace.md").read_text(encoding="utf-8")
     line = next(l for l in text.splitlines() if l.startswith("- `1 Projects/` - projects"))
-    return line[line.index("In `Documents/`"):]
+    return line[line.index("In `01. Documents/`"):]
 
 
 class RuleTests(unittest.TestCase):
@@ -69,7 +69,7 @@ class RuleTests(unittest.TestCase):
             self.assertIn(phrase, section)
 
     def test_the_layout_example_follows_the_naming_rule(self):
-        block = re.search(r"```text\n(Documents/\n.*?)```", versions_section(), re.S).group(1)
+        block = re.search(r"```text\n(01\. Documents/\n.*?)```", versions_section(), re.S).group(1)
         lines = [line.split("<-")[0].rstrip() for line in block.splitlines()[1:]]
         working = [line.strip() for line in lines if re.match(r"^  \S", line) and not line.endswith("/")]
         copies = [line.strip() for line in lines if line.startswith("    ")]
@@ -100,7 +100,8 @@ class HelpCommandTests(PaceFolder):
         place = create[create.index("--source-file") + 1]
         first_copy = self.pace / place
         # The help's copy sits in Archive/ inside this invented project's Documents/, named as the rule says.
-        self.assertEqual((first_copy.parent.name, first_copy.parent.parent.name), ("Archive", pr.WORKING_DIR), place)
+        self.assertEqual((first_copy.parent.name, first_copy.parent.parent.name), ("Archive", "01. Documents"), place)
+        self.assertEqual(first_copy.parent.parent, pr.working_dir(first_copy.parent.parent.parent))
         self.assertTrue(first_copy.parent.parent.is_dir(), place)
         self.assertIsNotNone(COPY_NAME.match(first_copy.name), place)
         first_copy.parent.mkdir()

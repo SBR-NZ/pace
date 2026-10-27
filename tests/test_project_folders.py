@@ -11,7 +11,9 @@ import unittest
 
 sys.dont_write_bytecode = True  # keep PACE's Product folder free of cache files
 
-from test_records import CLIENT, HELP, PACE_FOLDER, PaceFolder, pr
+from test_records import CLIENT, CLIENT_DIR, DOCS, HELP, PACE_FOLDER, PaceFolder, pr
+
+PLANS_DIR = f"{CLIENT_DIR}/03. Plans"  # after 02. Budget 2027
 
 PROJECTS_HELP = HELP / "projects.md"
 NEW = ["project-new", "--id", "kowhai-plans", "--name", "Plans", "--parent", CLIENT, "--by", "Test agent"]
@@ -28,7 +30,8 @@ class FolderOptionTests(PaceFolder):
         out, code = self.run_tool(*NEW, "--folder", "Deliverables", "--folder", "Meetings")
         self.assertEqual((out["status"], code), ("saved", 0), out)
         self.assertEqual(out["folders"], ["Deliverables", "Meetings"])
-        documents = self.pace / "1 Projects/Kowhai Books/Plans/Documents"
+        self.assertEqual(out["folder"], PLANS_DIR)
+        documents = self.pace / PLANS_DIR / DOCS
         self.assertEqual(sorted(p.name for p in documents.iterdir()), ["Deliverables", "Meetings"])
         self.assertIn("Deliverables/, Meetings/", out["message"])
 
@@ -36,8 +39,8 @@ class FolderOptionTests(PaceFolder):
         out, code = self.run_tool(*NEW)
         self.assertEqual((out["status"], code), ("saved", 0), out)
         self.assertNotIn("folders", out)
-        self.assertEqual(list((self.pace / "1 Projects/Kowhai Books/Plans/Documents").iterdir()), [])
-        self.assertRegex(out["message"], r"^Saved and read back: project kowhai-plans in 1 Projects/Kowhai Books/Plans \(with Documents/\)\. ")
+        self.assertEqual(list((self.pace / PLANS_DIR / DOCS).iterdir()), [])
+        self.assertRegex(out["message"], r"^Saved and read back: project kowhai-plans in 1 Projects/01\. Kowhai Books/03\. Plans \(with 01\. Documents/\)\. ")
 
     def test_bad_names_archive_and_repeats_are_refused_before_anything_is_made(self):
         cases = ((["Deliverables", "a/b"], "cannot be used"), (["archive"], "Archive/ is not made"),
@@ -52,14 +55,14 @@ class FolderOptionTests(PaceFolder):
                 self.assertNotEqual(code, 0)
                 self.assertIn(why, out["message"])
                 self.assertIn("Nothing was created", out["message"])
-                self.assertFalse((self.pace / "1 Projects/Kowhai Books/Plans").exists())
+                self.assertFalse(list((self.pace / CLIENT_DIR).glob("*Plans")))
 
     def test_a_retry_makes_any_folder_still_missing(self):
         self.assertEqual(self.run_tool(*NEW, "--folder", "Deliverables")[0]["status"], "saved")
         out, code = self.run_tool(*NEW, "--folder", "Deliverables", "--folder", "Sources")
         self.assertEqual((out["status"], code), ("already-saved", 0), out)
         self.assertEqual(out["folders"], ["Deliverables", "Sources"])
-        self.assertTrue((self.pace / "1 Projects/Kowhai Books/Plans/Documents/Sources").is_dir())
+        self.assertTrue((self.pace / PLANS_DIR / DOCS / "Sources").is_dir())
 
     def test_the_help_command_makes_what_it_says(self):
         line = re.search(r"`(python3 Product/Tools/pace_record\.py project-new [^`]*--folder[^`]*)`",
@@ -71,7 +74,7 @@ class FolderOptionTests(PaceFolder):
         out, code = self.run_tool(*args)
         self.assertEqual((out["status"], code), ("saved", 0), out)
         self.assertEqual(out["folders"], named)
-        documents = self.pace / out["folder"] / pr.WORKING_DIR
+        documents = pr.working_dir(self.pace / out["folder"])
         self.assertEqual(sorted(p.name for p in documents.iterdir()), sorted(named))
 
 

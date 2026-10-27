@@ -17,7 +17,7 @@ from unittest import mock
 
 sys.dont_write_bytecode = True  # keep PACE's Product folder free of cache files
 
-from test_records import BUDGET, CLIENT, PaceFolder, at, pr
+from test_records import BUDGET, BUDGET_DIR, CLIENT, PaceFolder, at, pr
 from test_overview_tool import AS_AT, Folder, OverviewCase
 from test_health_check import CheckCase, MARK, OWNER, STATE, pc, pu, setUpModule, tearDownModule, write_project, write_record  # noqa: F401
 from test_addins import PACE_FOLDER
@@ -88,7 +88,7 @@ class UpdateActionFindings(PaceFolder):
 
     def test_l4_an_item_whose_project_folder_is_missing_can_still_be_updated(self):
         earlier = self.action()
-        shutil.rmtree(self.pace / "1 Projects/Kowhai Books/Budget 2027")
+        shutil.rmtree(self.pace / BUDGET_DIR)
         _, out, _ = self.update(earlier, "--state", "done")
         self.assertEqual(out["status"], "saved", out)
 
@@ -149,7 +149,7 @@ class HealthCheckFindings(CheckCase):
         self.assertIn("kahu-deed (1 record), kahu-trust (1 record)", found["message"])
         self.assertIn("Only if a project is truly gone", found["fix"])
         # Make one project's identity file unreadable: its records' id is then not known to be missing.
-        (self.pace / "1 Projects/Kowhai Books/Budget 2027/Pace project.md").write_bytes(b"\xff\xfe not a project file")
+        (self.pace / "1 Projects/01. Kowhai Books/02. Budget 2027/Pace project.md").write_bytes(b"\xff\xfe not a project file")
         out = self.check()
         [found] = [item for item in self.found(out, "projects") if "Records use project ids" in item["message"]]
         self.assertEqual(found["level"], "warning")

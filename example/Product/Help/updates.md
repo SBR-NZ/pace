@@ -40,6 +40,10 @@ From 3.11.0 the updater checks the folder names itself: until they are renamed, 
 
 From release 3.14.0 finished work can be archived into year and month folders inside `Record/`, as [Records and source evidence](records.md) describes under Archiving finished work. An update never moves a record, and `Record/` is protected with everything in it. Releases before 3.14.0 cannot read archived records, so once a folder has some, the updater will not install an earlier release: its preview says so, and `prepare` and the install stop before changing anything.
 
+## Numbered project folders from 3.16.0
+
+From release 3.16.0 each project folder in `1 Projects/` is numbered, so it keeps its place as more are added, and each new project's files are in `01. Documents/`, as [Projects and repository references](projects.md) describes under Numbered folders. An update never renames a folder of yours. Number the folders you already have with the folders tool when you choose, ideally soon after updating: until then, new projects, which are numbered, sort above them. Records still find their files either way. Once your folders are numbered, the updater will not install a release from before 3.16.0, whose tools would show the numbers in project names: its preview says so, and `prepare` and the install stop before changing anything.
+
 ## Pace.md
 
 `Pace.md` is mostly Pace's own text, in parts that each start at a heading. Three parts end with a mark, `<!-- Your lines go below this one. Pace updates never change them. -->`: the add-in index lines, standing instructions and the time zone line go below it. The last line of `Pace.md` records each part as Pace shipped it, so an update can tell which parts you have changed. An update:

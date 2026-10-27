@@ -6,26 +6,51 @@ Projects keep the owner's work in order. A project can sit inside a **parent pro
 
 ```text
 1 Projects/
-  Kowhai Books/                 <- parent project (a client), id kowhai-books
+  01. Kowhai Books/             <- parent project (a client), id kowhai-books
     Pace project.md
-    Budget 2027/                <- project inside it, id kowhai-budget
+    01. Documents/              <- its own files
+    02. Budget 2027/            <- project inside it, id kowhai-budget
       Pace project.md
-      Documents/                <- this project's files
-      Board pack/               <- a project inside that one, id kowhai-board-pack
+      01. Documents/            <- this project's files
+      02. Board pack/           <- a project inside that one, id kowhai-board-pack
         Pace project.md
-        Documents/
-  Garden plans/                 <- a project on its own, id garden-plans
+        01. Documents/
+  02. Garden plans/             <- a project on its own, id garden-plans
     Pace project.md
-    Documents/
+    01. Documents/
 ```
 
 - A project's own projects are folders beside its `Documents/`, as many levels down as the work needs. Two or three levels are usually enough, such as a client, a piece of work for it and one part of that, because every level makes the path of each file kept below it longer: see Long paths below.
 - A project on its own needs no client and can still have its own `Documents/`.
-- The folder name is the project's name. The owner can rename a folder at any time; the id inside does not change.
+- Each folder is numbered, as Numbered folders below describes. The folder's name after its number is the project's name. The owner can rename a folder at any time, keeping its number; the id inside does not change.
+
+### Numbered folders
+
+Each project folder in `1 Projects/` starts with its number, a full stop and a space, such as `02. Budget 2027`, so it keeps its place as more are added rather than moving with the alphabet: at the top from `01.`, and inside a project from `02.`, after the project's `01. Documents/`. Pages and chat show a project's name without its number: `Budget 2027`, not `02. Budget 2027`.
+
+- **The full stop marks a number.** A name that starts with digits but no full stop, such as `24 Hour Fitness` or `2026 Tax return`, has no number: its folder is numbered in front of that, as `03. 24 Hour Fitness`. A folder already named with two digits, a full stop and a space, such as `24. Dezember Feier`, counts as numbered, so if those digits are part of its name, rename it first, such as to `24 Dezember Feier`.
+- **Two digits, `01` to `99`**, so folders list in order even where names are sorted as plain text. A number is not changed once given.
+- **Each new project gets the next number:** one more than the highest a project folder beside it has, never one a folder of the owner's own already starts with, such as `99. Archive`. Once those run out, it gets a free number below; when all 99 are taken, make the new project inside the project it belongs to, or free a number by hand, such as by taking the number off a folder of the owner's own that is not a project. The record tool numbers each new project itself, so give it the name without a number; by hand, give the folder the next number in the same way.
+- **A project's Documents folder** is `01. Documents/`, or `Documents/` in a project not numbered yet. Any other number before Documents makes an ordinary folder.
+
+A Pace folder made before release 3.16.0 numbers the folders it already has with the folders tool, on the owner's yes:
+
+```text
+python3 Product/Tools/pace_folders.py preview
+python3 Product/Tools/pace_folders.py apply --plan <plan> --go-ahead "<the owner's words>" --by "Claude Code"
+```
+
+- `preview` shows each new name and changes nothing. Each `Documents/` becomes `01. Documents/`. A folder that already starts with a number keeps it, and the other project folders take the lowest numbers no folder beside them starts with, in the order a file browser lists them now, as Windows File Explorer does near enough (ignoring case, accents, hyphens and apostrophes). So they keep their order among themselves, and a folder already numbered, such as the owner's own `05. Admin`, keeps its place among them by its number. Folders with no `Pace project.md`, and the folders inside `Documents/`, keep their names, so those without a number come after the numbered ones.
+- It leaves as they are, and says why: a folder reached through a link or junction, a project inside a folder that is not a project (such as a repository checkout), a project that could not be read, or whose name is not valid text or holds a line break, and everything in it, a folder that would have the same name as one beside it once numbered, and both Documents folders of a project that has two.
+- Before saying yes, the owner should know that anything that finds a file in these folders by its path stops finding it: links between Excel workbooks in different folders, Power Query and Power BI file sources, shortcuts and pinned folders. The preview also names any file whose path would then pass Excel's limit, or reach the 260 characters at which other Office and Windows tools stop, as Long paths describes. Close any file open from these folders and let OneDrive finish syncing first.
+- `apply` saves a record of the renames and reads it back, then renames each folder, the deepest first, never over a folder already there, and checks it. A folder that cannot be renamed, for example because a file in it is open, keeps its name while the rest are renamed, and a correction of the record says what happened to each; a later run gives the folders still waiting the lowest numbers then free, in the same order, so each gets the number planned for it unless a folder beside it has been made, removed or renamed since.
+- Records keep the paths they were saved with. The tools still find each file through the numbered folders; by hand, look for the folder with the same name after a number.
+
+The health check says when the folders tool would still number some folders, and names any it cannot number until the owner sorts them out.
 
 ### Long paths
 
-Each level adds its folder's name to the path of every file kept under it. Excel cannot open or save a file whose full path, from the drive letter, is longer than 218 characters, and other Office and Windows tools stop at about 260. A Pace folder kept in OneDrive already uses about 60 of them, such as `C:\Users\<name>\OneDrive - <Company>\PACE\`. So keep project folder names short, the lower down the shorter, and leave the rest of the room for the files. When the record tool makes a project, it reports how many characters are left inside its `Documents/` for folders and file names, counting the Pace folder's own place as at least that long, and warns when fewer than 100 are left. A project folder can be renamed at any time, since its id does not change.
+Each level adds its folder's name, with its number, to the path of every file kept under it. Excel cannot open or save a file whose full path, from the drive letter, is longer than 218 characters, and other Office and Windows tools stop at about 260. A Pace folder kept in OneDrive already uses about 60 of them, such as `C:\Users\<name>\OneDrive - <Company>\PACE\`. So keep project folder names short, the lower down the shorter, and leave the rest of the room for the files. When the record tool makes a project, it reports how many characters are left inside its `01. Documents/` for folders and file names, counting the Pace folder's own place as at least that long, and warns when fewer than 100 are left. A project folder can be renamed at any time, since its id does not change.
 
 ## The project id
 
@@ -49,9 +74,9 @@ Budget for the 2027 year.
 
 ## Making a project
 
-With the record tool: `python3 Product/Tools/pace_record.py project-new --id kowhai-budget --name "Budget 2027" --parent kowhai-books --by "Claude Code"`. The parent can be any project, at any level. It refuses an id that is already used, creates the folder with `Documents/` inside its parent's folder, writes `Pace project.md` as a new file and reads it back. It reports the same outcomes as a record save, with `path_room`, the characters left for paths inside `Documents/`, and a warning in its message when that is short. `projects` lists every project with its id, parent and folder.
+With the record tool: `python3 Product/Tools/pace_record.py project-new --id kowhai-budget --name "Budget 2027" --parent kowhai-books --by "Claude Code"`. The parent can be any project, at any level. It refuses an id that is already used, creates the folder inside its parent's folder, numbered after the others there, with `01. Documents/` inside it, writes `Pace project.md` as a new file and reads it back. Give the name without a number. A folder already there with that name, numbered or not, is used rather than a second one made, so repeating the command is safe. It reports the same outcomes as a record save, with `path_room`, the characters left for paths inside `01. Documents/`, and a warning in its message when that is short. `projects` lists every project with its id, parent and folder.
 
-By hand: check no other `Pace project.md` already uses the id, create the folder (inside its parent's folder when it has one), create `Pace project.md` as a new file, add a `Documents/` folder, and open the file again before calling it made. If the path to the new `Documents/` is long, as Long paths above describes, tell the owner and suggest a shorter name.
+By hand: check no other `Pace project.md` already uses the id, create the folder (inside its parent's folder when it has one) with the next number, create `Pace project.md` as a new file, add a `01. Documents/` folder, and open the file again before calling it made. If the path to the new `Documents/` is long, as Long paths above describes, tell the owner and suggest a shorter name.
 
 ### Folders inside Documents/
 
@@ -84,7 +109,7 @@ Listing projects reports, rather than guesses:
 - the same id in two folders (ask the owner which is right);
 - a project whose `parent` does not match the folder it sits in;
 - a `Pace project.md` that cannot be read;
-- folders with no `Pace project.md`, which are simply not projects yet. One that holds a project somewhere inside is not listed itself, but the project inside is reported; a folder inside a listed one is not listed again. Folders whose names start with a dot, such as `.git`, are left out unless they hold a `Pace project.md`, and so is a project's `Documents/` folder, whatever the case of its name;
+- folders with no `Pace project.md`, which are simply not projects yet. One that holds a project somewhere inside is not listed itself, but the project inside is reported; a folder inside a listed one is not listed again. Folders whose names start with a dot, such as `.git`, are left out unless they hold a `Pace project.md`, and so is a project's `Documents/` folder, numbered or not, whatever the case of its name;
 - a folder that cannot be read, or one with no `Pace project.md` that holds more than 500 folders, which is named rather than taken as empty. So that every command stays quick, no more than 5,000 folders with no `Pace project.md` are looked into in all, and nothing more than 40 levels below `1 Projects/`; anything past either is named too. A new project's folder name cannot start with a dot, since that hides the folder on some computers.
 
 A record whose project id has no matching folder is still shown, with that gap named.
@@ -100,7 +125,7 @@ A project's `Documents/` can be arranged in whatever folders suit the owner. Whe
 **A dated copy of each version that goes out.** A version is the working file as it was when it was sent, presented, filed or signed off. Saving as you work does not make a version; storage such as OneDrive may keep its own history of saves, but Pace does not read it or rely on it. Each version is a copy in an `Archive/` folder beside the working file, named `YYYY-MM-DD <name> v<N>.<extension>`: the day it went out (in the owner's time zone when `Pace.md` names one), the working file's name and the version number. The date comes first, so the folder lists versions in the order they went out.
 
 ```text
-Documents/
+01. Documents/
   Budget 2027.xlsx                    <- the working file
   Archive/
     2026-11-04 Budget 2027 v1.xlsx    <- the workbook sent to the board
@@ -119,7 +144,7 @@ Documents/
 With the record tool, `--source-file` adds the copy's place and fingerprint, and `find` lists the versions newest first:
 
 ```text
-python3 Product/Tools/pace_record.py create --request <request> --project kowhai-budget --kind result --subject "Budget 2027" --from owner --words "The budget went to the board this morning." --source-file "1 Projects/Kowhai Books/Budget 2027/Documents/Archive/2026-11-04 Budget 2027 v1.xlsx" --by "Claude Code" --body "Version 1 of the 2027 budget went to the board on 4 November."
+python3 Product/Tools/pace_record.py create --request <request> --project kowhai-budget --kind result --subject "Budget 2027" --from owner --words "The budget went to the board this morning." --source-file "1 Projects/01. Kowhai Books/02. Budget 2027/01. Documents/Archive/2026-11-04 Budget 2027 v1.xlsx" --by "Claude Code" --body "Version 1 of the 2027 budget went to the board on 4 November."
 python3 Product/Tools/pace_record.py find --project kowhai-budget --kind result --subject "Budget 2027"
 ```
 
@@ -138,4 +163,4 @@ Files kept in a git repository have their versions in git, so this section does 
 
 ## Repository references
 
-`Repos/` uses the same project names and stable ids, with one home per repository and explicit links from any other project that uses it. Prefer links over checkouts. [Repository references and coding sessions](repositories.md) shows the format and how to keep a job's status, branch or link and outcome in the project's records. The repository's own instructions govern coding.
+`Repos/` uses the same project names, without their numbers, and stable ids, with one home per repository and explicit links from any other project that uses it. Prefer links over checkouts. [Repository references and coding sessions](repositories.md) shows the format and how to keep a job's status, branch or link and outcome in the project's records. The repository's own instructions govern coding.

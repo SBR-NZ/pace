@@ -63,11 +63,13 @@ class WholePaceFolderTest(unittest.TestCase):
                 if target and not re.match(r"^[a-z]+://", target) and not (page.parent / target).is_file():
                     broken.append((page.relative_to(ROOT).as_posix(), target))
         self.assertEqual(broken, [])
-        # Projects live in 1 Projects/, each with its files in Documents/; the older names appear nowhere in either folder.
+        # Projects live in 1 Projects/, each numbered, with its files in 01. Documents/; the older names appear nowhere in either folder.
         for root in (PACE_FOLDER, EXAMPLE):
             self.assertTrue((root / "1 Projects").is_dir())
             self.assertFalse((root / "Project files").exists())
-            self.assertIn("- `1 Projects/` - projects, each with its files in `Documents/`.", (root / "Pace.md").read_text(encoding="utf-8"))
+            self.assertIn("- `1 Projects/` - projects, each folder numbered so it keeps its place, with its files in `01. Documents/` "
+                          "(`Documents/` in a project not numbered yet); pages and chat show a project's name without its number.",
+                          (root / "Pace.md").read_text(encoding="utf-8"))
             stale = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
                            if p.is_file() and "__pycache__" not in p.parts
                            and re.search(rb"(?i)project files|working files", p.read_bytes()))

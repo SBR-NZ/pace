@@ -18,7 +18,7 @@ sys.dont_write_bytecode = True  # keep PACE's Product folder free of cache files
 from contextlib import redirect_stdout
 
 from test_updates import PACE_FOLDER, Repo, owner_view, pu, setUpModule, tearDownModule  # noqa: F401 (module setup)
-from test_records import PaceFolder, BUDGET
+from test_records import PaceFolder, BUDGET, BUDGET_DIR, DOCS
 from test_overview_tool import Folder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -286,9 +286,9 @@ class RecordToolHintTests(PaceFolder):
 
     def test_an_exact_act_named_by_its_older_path_is_still_the_same_file(self):
         # The review found the record tool mapped a recorded old path but not one given on the command line.
-        act = self.pace / "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt"
+        act = self.pace / BUDGET_DIR / DOCS / "close.txt"
         act.write_bytes(b"Invented October close.\n")
-        relative = "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt"
+        relative = f"{BUDGET_DIR}/{DOCS}/close.txt"
         shown = self.run_tool("propose", "--act", "Accept October close", "--act-file", relative)[0]["act_sha256"]
         request = self.new_request()
         out, _ = self.run_tool("confirm", "--request", request, "--project", BUDGET, "--subject", "October close",
@@ -296,11 +296,14 @@ class RecordToolHintTests(PaceFolder):
                                "--source", "Invented close statement", "--owner-words", "Yes, accept it.",
                                "--owner-current", "--by", "Test agent")
         self.assertEqual(out["status"], "confirmed", out)
-        # As a record saved before 3.11.0 would have it.
+        # As a record saved before 3.11.0 would have it, before its folders were numbered too.
         saved = self.pace / "Record" / f"{request}.md"
-        saved.write_text(saved.read_text(encoding="utf-8").replace("act-file: 1 Projects/", "act-file: Projects/"),
+        saved.write_text(saved.read_text(encoding="utf-8").replace(f"act-file: {relative}",
+                                                                   "act-file: Projects/Kowhai Books/Budget 2027/Documents/close.txt"),
                          encoding="utf-8")
-        for given in ("Projects/Kowhai Books/Budget 2027/Documents/close.txt", relative, str(act)):
+        self.assertIn("act-file: Projects/Kowhai Books/Budget 2027/Documents/close.txt", saved.read_text(encoding="utf-8"))
+        for given in ("Projects/Kowhai Books/Budget 2027/Documents/close.txt",
+                      "1 Projects/Kowhai Books/Budget 2027/Documents/close.txt", relative, str(act)):
             with self.subTest(given=given):
                 out, code = self.run_tool("confirmation-status", "--request", request, "--act-file", given)
                 self.assertEqual((out["status"], code), ("confirmed", 0), out)
