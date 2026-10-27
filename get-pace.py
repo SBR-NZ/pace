@@ -55,7 +55,8 @@ def main(argv=None) -> int:
         return 1
     print(f"Copied PACE from release {tag}, full commit {commit}, into {Path(args.to).expanduser().resolve() / 'PACE'}.")
     print(f"Where it came from and which release it is are noted in PACE/{update.RELEASE_RECORD}/{update.NOTE}.")
-    print("Open PACE/Pace.md to begin. To check for a later release, run from the PACE folder: "
+    print("Open PACE/Pace.md to begin, and in your first chat ask your assistant to set up Pace with the Getting started "
+          "add-in. To check for a later release, run from the PACE folder: "
           "python3 Product/Tools/pace_update.py preview --root . --latest")
     return 0
 

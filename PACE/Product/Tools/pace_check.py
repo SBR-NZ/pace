@@ -48,6 +48,13 @@ LAST_CHECKED = re.compile(r"^\s*Last checked:\s*`?([^`\s]+)`?\s*$", re.I | re.M)
 REPO_ID = re.compile(r"^\s*(Home|Using) project id:\s*(\S+)\s*$", re.I | re.M)
 LEFTOVER_PREFIXES = (pr.TEMP_PREFIX, pu.CHECK_PREFIX)
 RENAME_HELP = "Updates help, under Folder names from 3.11.0, gives the steps."
+# OneDrive for Business shows a folder of more than 5,000 items slowly, or with errors, on its web pages (SharePoint's
+# list view threshold). Syncing and Pace's tools are not affected and there is nothing to do, so it is only a note.
+RECORD_FOLDER_NOTE = 4000
+RECORD_FOLDER_LIMIT = 5000
+# Files an empty folder can still hold: Pace's own placeholder, and what Finder and Windows Explorer leave.
+PLACEHOLDERS = {".gitkeep"} | set(pu.SYSTEM_FILES)
+GETTING_STARTED = "Getting started"
 
 
 class Findings:
@@ -97,6 +104,16 @@ def projects_under_old_name(pace: Path) -> bool:
     return not numbered.is_dir() or pr.has_content(old)
 
 
+def holds_nothing(folder: Path) -> bool:
+    """True only when the folder could be listed and holds nothing but the files an empty folder can have. A folder
+    that cannot be listed is never taken as empty."""
+    try:
+        with os.scandir(folder) as listing:
+            return all(entry.is_file() and entry.name.lower() in PLACEHOLDERS for entry in listing)
+    except OSError:
+        return False
+
+
 def check_folders(pace: Path, found: Findings) -> None:
     held = projects_under_old_name(pace)
     for name, level, why in (
@@ -137,6 +154,21 @@ def read_pace_md(pace: Path, found: Findings) -> str | None:
                   "Open it and save it again as UTF-8 text, or put back an earlier version from OneDrive.")
         return None
     return text.replace("\r\n", "\n")
+
+
+def index_lines(text: str | None) -> list:
+    """The add-in index lines below its mark, leaving out the placeholder line."""
+    if text is None:
+        return []
+    parts, _ = pu.pace_md_parts(text)
+    index = next((part for part in parts if part["id"] == "add-in-index"), None)
+    lines = [line.strip() for line in (index["yours"] if index and index["yours"] else []) if line.strip()]
+    return [line for line in lines if line != NO_ADDINS]
+
+
+def switched_on(text: str | None) -> set:
+    """The names of the add-ins the index switches on."""
+    return {match["name"].strip() for match in map(INDEX_LINE.match, index_lines(text)) if match}
 
 
 def check_pace_md(pace: Path, text: str, found: Findings, people: dict, steps: list) -> None:
@@ -253,6 +285,19 @@ def check_records(pace: Path, found: Findings) -> tuple:
         else:
             found.add("warning", "record-files", issue["message"], "Ask the owner what it is; nothing in Record/ but "
                       "records is read.", files=[f"{pr.RECORD_DIR}/{issue['file']}"])
+    try:  # OneDrive counts every item in the folder, not only records
+        with os.scandir(record_dir) as listing:
+            items = sum(1 for _ in listing)
+    except OSError:
+        items = len(names) + len(copies)
+    if items >= RECORD_FOLDER_NOTE:
+        past = (f", more than the {RECORD_FOLDER_LIMIT:,} past which OneDrive's web pages show a folder slowly or with "
+                "errors" if items > RECORD_FOLDER_LIMIT else f". Past {RECORD_FOLDER_LIMIT:,} items in one folder, "
+                "OneDrive's web pages show it slowly or with errors")
+        found.add("note", "record-files", f"{pr.RECORD_DIR}/ holds {items:,} items{past}, and a OneDrive connection lists "
+                  "it more slowly.", "Nothing needs doing: syncing and Pace's tools work the same at any size. If OneDrive's "
+                  "web pages are slow, open the folder on a computer instead. Never move or rename a record to make the "
+                  f"folder smaller: Pace reads records only directly in {pr.RECORD_DIR}/.")
     for request, name in copies:
         try:
             same = (record_dir / name).read_bytes() == (record_dir / f"{request}.md").read_bytes()
@@ -590,6 +635,12 @@ def run(args) -> tuple:
     if text is not None:
         check_pace_md(pace, text, found, people, steps)
     projects = check_projects(pace, found, folder)
+    # New only when both folders were read in full and hold nothing: Getting started makes projects, and a project
+    # made again beside one that could not be read would be two folders with one id.
+    if not steps and not projects and holds_nothing(pace / pr.RECORD_DIR) and holds_nothing(pace / pr.PROJECTS_DIR):
+        found.add("note", "new-folder", "This Pace folder looks new: it has no projects and no records yet.",
+                  f"Ask the assistant to set up Pace with {GETTING_STARTED}." if GETTING_STARTED in switched_on(text) else
+                  f"Switch on {GETTING_STARTED} and ask the assistant to set up Pace with it, as add-ins help describes.")
     check_repos(pace, found, projects)
     check_release(pace, found, args.latest)
     check_assistant_setup(pace, found, today)

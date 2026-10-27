@@ -74,9 +74,9 @@ For a central copy that your organisation's IT team keeps for its users, IT uses
 
 The updater reports **installed locally** only after reading the new files back from the disk of the computer that ran it. That is not the same as **arrived in OneDrive**. OneDrive may still be uploading, and another device may not have the files yet. Check OneDrive itself, for example its sync icon or the folder on the web, before saying the update has reached OneDrive or your other devices.
 
-## Copilot can only suggest an update
+## Copilot and other connections can only suggest an update
 
-Copilot's OneDrive connection can create new files but cannot replace existing ones, so Copilot cannot install an update. Copilot can read `Release record/Installed release.md` to say which release is installed and where releases come from. In Copilot, Pace can only suggest an update: name the release and say it needs to be installed with the updater on a computer that can replace files, such as a terminal or Claude Code on a PC where the Pace folder syncs, or by your IT team. A downloaded copy of a release is not an installed update. Other hosts' access to a private repository, or to replace files in the cloud directly, is not promised.
+Copilot's OneDrive connection can create new files but cannot replace existing ones, so Copilot cannot install an update. Claude on the web or phone can replace files through its Microsoft 365 connection but cannot run the updater, so it cannot install one either. Either can read `Release record/Installed release.md` to say which release is installed and where releases come from. Through a connection, Pace can only suggest an update: name the release and say it needs to be installed with the updater on a computer that can replace files, such as a terminal or Claude Code on a PC where the Pace folder syncs, or by your IT team. A downloaded copy of a release is not an installed update. Other hosts' access to a private repository is not promised.
 
 ## The release record
 

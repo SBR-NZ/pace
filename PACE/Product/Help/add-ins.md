@@ -24,6 +24,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 
 | Add-in | What it is for |
 | --- | --- |
+| Getting started | Setting up a new Pace folder with its owner: their name, time zone, first projects, add-ins and assistants. |
 | Daily brief | What needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. |
 | Project overview | Where one project, every project or one person's work stands, kept as a dated page in `2 Views/` with a short summary in chat. |
 | Key numbers and changes | Reading agreed key numbers from handed-over files and comparing two versions. |
@@ -39,9 +40,10 @@ Project overview is the only add-in that makes a page. Its page template, `overv
 
 ## Switching one on or off
 
-To switch an add-in on, add its line to the add-in index in `Pace.md`, below the "Your lines" mark, where updates never change it. To switch it off, delete the line. The assistant can make this edit when the owner asks in their own words, and shows the changed line. An assistant that cannot replace `Pace.md` (Copilot through its OneDrive connection, for example) says so and shows the owner the exact line to paste into the add-in index themselves; the add-in is on only once `Pace.md` shows that line. When the first add-in is switched on, remove the placeholder line `None switched on yet.` from the index at the same time; when the last one is switched off, put it back. Here are the lines for the shipped add-ins, ready to copy:
+To switch an add-in on, add its line to the add-in index in `Pace.md`, below the "Your lines" mark, where updates never change it. To switch it off, delete the line. The assistant can make this edit when the owner asks in their own words, and shows the changed line. An assistant that cannot replace `Pace.md` (Copilot through its OneDrive connection, for example) says so and shows the owner the exact line to paste into the add-in index themselves; the add-in is on only once `Pace.md` shows that line. One that can replace it through a OneDrive connection follows [Assistants and dated views](hosts-and-views.md), under Through a OneDrive connection. When the first add-in is switched on, remove the placeholder line `None switched on yet.` from the index at the same time; when the last one is switched off, put it back. Here are the lines for the shipped add-ins, ready to copy:
 
 ```text
+- **Getting started** - Set up a new Pace folder with its owner: their name, time zone, first projects, add-ins and assistants. `Product/Pace add-ins/Getting started/ADD-IN.md`
 - **Daily brief** - Gather what needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. `Product/Pace add-ins/Daily brief/ADD-IN.md`
 - **Project overview** - Show where one project, every project or one person's work stands. `Product/Pace add-ins/Project overview/ADD-IN.md`
 - **Key numbers and changes** - Read agreed key numbers from handed-over files and compare two versions, like with like. `Product/Pace add-ins/Key numbers and changes/ADD-IN.md`

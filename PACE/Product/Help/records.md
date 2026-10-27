@@ -38,7 +38,7 @@ A pasted report, a file or a connection result (such as Power BI or Xero) is **e
 | Possible duplicate | A record saying the same thing for the same project already exists. Nothing was written. | Ask whether this is a separate record. If it is, save again with `--not-a-duplicate`: the new record names the others in `separate-from`, and searches stop flagging them. |
 | Not saved | Something was missing or wrong, or the folder could not be written. | Not saved, and why. |
 
-A check made on this computer's copy of `Record/` does not show that a cloud copy (such as OneDrive) has received the file. A draft in a scratch area or in chat is not a save.
+A check made on this computer's copy of `Record/` does not show that a cloud copy (such as OneDrive) has received the file. A draft in a scratch area or in chat is not a save. An assistant that reaches the Pace folder only through a OneDrive connection also follows [Assistants and dated views](hosts-and-views.md), under Through a OneDrive connection.
 
 Some folders let files be created but not deleted. There a save can leave one hidden temporary file, whose name starts with `.pace-tmp-`, because it was not allowed to delete it; the save's result names the file. It is harmless and is not a record, and someone with delete rights can delete it. While it is there, later saves in that folder write each record straight to its own file, so they leave no more. Searches name any such file in `Record/`.
 

@@ -10,7 +10,7 @@ You need Python 3, git and a copy of this repository on your computer (`git clon
 python3 get-pace.py --to <place>
 ```
 
-It finds the newest release, shows its tag and full commit, and creates `<place>/PACE` holding only the PACE folder. It also writes `PACE/Release record/Installed release.md`, which notes where the release came from and which release it is, so a later update check needs nothing typed in. If `<place>` already has a PACE folder, it stops and changes nothing; update that folder instead. Open `PACE/Pace.md` when you start a chat; it links to the rest of the help.
+It finds the newest release, shows its tag and full commit, and creates `<place>/PACE` holding only the PACE folder. It also writes `PACE/Release record/Installed release.md`, which notes where the release came from and which release it is, so a later update check needs nothing typed in. If `<place>` already has a PACE folder, it stops and changes nothing; update that folder instead. Open `PACE/Pace.md` when you start a chat; it links to the rest of the help. In your first chat, ask your assistant to set up Pace: the Getting started add-in takes you through your name, time zone, first projects, add-ins and assistants.
 
 ## Update PACE
 

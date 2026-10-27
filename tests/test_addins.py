@@ -23,6 +23,7 @@ OLDER_MY_ADD_INS = Path("Pace/Add-ins/My add-ins")  # where an older folder keep
 HELP = PACE_FOLDER / "Product/Help/add-ins.md"
 
 CATALOGUE = (
+    "Getting started",
     "Daily brief",
     "Project overview",
     "Key numbers and changes",
@@ -527,7 +528,7 @@ class RoutingTests(unittest.TestCase):
         with InventedFolder() as folder:
             folder.customise("Daily brief", "Daily brief - mine")
             folder.set_index([
-                catalogue_lines()[0],
+                next(line for line in catalogue_lines() if line.startswith("- **Daily brief** ")),
                 f"- **Daily brief** - My own brief. `{MY_ADD_INS}/Daily brief - mine/ADD-IN.md`",
             ])
             chat = Chat(folder.root)

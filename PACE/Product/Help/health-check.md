@@ -19,10 +19,11 @@ It prints one JSON object. `status` is `healthy` when nothing needs doing, `atte
 
 - **Folders:** `Record/`, `1 Projects/`, `Product/` and `Release record/` are there, and no folder still has its name from before release 3.11.0.
 - **Pace.md:** that it can be read and records Pace's parts as shipped, which parts the owner has changed, the `Owner:` and `Time zone:` lines, that every add-in index line opens a file that is there, and any line naming a folder by its old name.
-- **Records:** every file in `Record/` is opened. It names second copies, files that are not records, records that do not follow [the record format](record-format.md), corrections of records that are missing, corrections that loop, items recorded two ways, targets that are not real dates, and project ids that no project has. A save's leftover temporary file is named as harmless when it reads the same as its record.
+- **Records:** every file in `Record/` is opened. It names second copies, files that are not records, records that do not follow [the record format](record-format.md), corrections of records that are missing, corrections that loop, items recorded two ways, targets that are not real dates, and project ids that no project has. A save's leftover temporary file is named as harmless when it reads the same as its record. From 4,000 items it notes how close `Record/` is to 5,000, past which OneDrive's web pages show a folder slowly or with errors. It is only a note: syncing and Pace's tools work the same at any size.
 - **Projects and repository references:** a `Pace project.md` that cannot be read, two folders with one id, projects in the wrong parent, folders in `1 Projects/` with no `Pace project.md`, and references in `Repos/` whose project id no project has or that are not in their project's place.
 - **The release and Product:** that the release note can be read, whether an update was left part-way, and whether files inside `Product/` differ from the installed release, which the next update would replace.
 - **The owner's assistant setup:** whether `3 My add-ins/Assistant setup.md` is there, and whether it was checked in the last 90 days.
+- **A new folder:** one whose `Record/` and `1 Projects/` are both empty is pointed to the Getting started add-in. A folder that could not be read in full is never called new.
 
 ## Acting on what it finds
 

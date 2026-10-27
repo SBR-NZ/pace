@@ -1,6 +1,6 @@
 # Record format: record-1
 
-This page describes exactly what a record file looks like, so any assistant can make or read one by hand, even one that cannot run the record tool. [Records and source evidence](records.md) explains when to keep a record and what each outcome means.
+This page describes exactly what a record file looks like, so any assistant can make or read one by hand, even one that cannot run the record tool. [Records and source evidence](records.md) explains when to keep a record and what each outcome means. An assistant that reaches the Pace folder only through a OneDrive connection also follows [Assistants and dated views](hosts-and-views.md), under Through a OneDrive connection.
 
 ## Where a record goes and its name
 
