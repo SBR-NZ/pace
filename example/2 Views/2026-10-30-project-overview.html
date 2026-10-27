@@ -100,7 +100,7 @@ summary { cursor: pointer; }
 .row > summary::-webkit-details-marker, .node > summary::-webkit-details-marker { display: none; }
 .row > summary {
   display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.75rem 7rem minmax(0, 1fr) auto;
   gap: 0 1rem;
   align-items: baseline;
   padding: 0.5rem 0.25rem;
@@ -112,7 +112,9 @@ summary { cursor: pointer; }
 .go { margin-top: 0.35rem; font-size: 0.85rem; }
 .jump { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 0.2em; }
 .jump:hover { text-decoration-color: var(--muted); }
-.more { padding: 0.25rem 0.25rem 0.75rem 8.25rem; background: var(--panel); }
+.more { padding: 0.25rem 0.25rem 0.75rem 11rem; background: var(--panel); }
+.no { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: right; }
+.pair .no { display: inline-block; min-width: 1.75rem; margin-right: 0.25rem; }
 .more p + p { margin-top: 0.25rem; }
 .meta { color: var(--muted); font-size: 0.85rem; }
 .tag { justify-self: start; color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
@@ -184,9 +186,9 @@ details.files { padding-left: 0; }
   h1 { font-size: 1.6rem; }
   .summary { gap: 0.5rem 1.25rem; }
   .stat strong { font-size: 1.6rem; }
-  .row > summary { grid-template-columns: 5.5rem minmax(0, 1fr); }
+  .row > summary { grid-template-columns: 1.5rem 5.5rem minmax(0, 1fr); }
   .tag { white-space: normal; }
-  .side { grid-column: 2; max-width: none; text-align: left; }
+  .side { grid-column: 3; max-width: none; text-align: left; }
   .more { padding-left: 0.25rem; }
   .heads { display: none; }
   .node > summary { grid-template-columns: 1rem minmax(0, 1fr) auto; }
@@ -245,23 +247,23 @@ details.files { padding-left: 0; }
 <div class="body">
 <p class="group">New</p>
 <ul class="rows">
-<li class="item"><details class="row">
-<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<li class="item" data-no="2" data-request="20261025T204000Z--maple-budget--csl001"><details class="row">
+<summary><span class="no">2.</span> <span class="tag late">2 days late</span> <span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
 <div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p></div>
 </details></li>
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<li class="item" data-no="3" data-request="20261025T205000Z--maple-budget--wag001"><details class="row">
+<summary><span class="no">3.</span> <span class="tag soon">In 4 days</span> <span class="subj">Wage assumptions</span> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
 <div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p></div>
 </details></li>
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
+<li class="item" data-no="4" data-request="20261023T112000Z--maple-campaign--task01"><details class="row">
+<summary><span class="no">4.</span> <span class="tag soon">In 6 days</span> <span class="subj">Invented campaign follow-up</span> <span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
 <div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p></div>
 </details></li>
 </ul>
 <p class="group">Done</p>
 <ul class="rows">
 <li class="item"><details class="row">
-<summary><span class="tag">Done</span><span class="subj">Invented website job</span><span class="side">Maple Lantern &rsaquo; Website</span></summary>
+<summary><span class="no"></span> <span class="tag">Done</span> <span class="subj">Invented website job</span> <span class="side">Maple Lantern &rsaquo; Website</span></summary>
 <div class="more"><p class="text">Status: done on local branch example/topic; no push, merge or publication claimed.</p><p class="meta">No person named &middot; no due date &middot; done</p></div>
 </details></li>
 </ul>
@@ -271,9 +273,9 @@ details.files { padding-left: 0; }
 <h2>Recorded two ways <span class="n">1</span></h2>
 <p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>
 <ul class="rows">
-<li class="pair">
-<p><strong>Board pack draft</strong> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></p>
-<ol class="accounts">
+<li class="pair" data-no="1" data-requests="20261027T020000Z--maple-budget--brd002 20261027T220000Z--maple-budget--brd003">
+<p><span class="no">1.</span> <strong>Board pack draft</strong> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></p>
+<ol class="accounts" type="a">
 <li class="item">
 <p class="text">Board pack draft moved to 12 November, in Ana&#39;s words.</p>
 <p class="meta">Owed by Ana Ruiz &middot; for you &middot; due 12 Nov 2026 &middot; open</p>
@@ -289,52 +291,52 @@ details.files { padding-left: 0; }
 <section class="part">
 <h2>Needs attention <span class="n">3</span></h2>
 <ul class="rows">
-<li class="item"><details class="row">
-<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<li class="item" data-no="2" data-request="20261025T204000Z--maple-budget--csl001"><details class="row">
+<summary><span class="no">2.</span> <span class="tag late">2 days late</span> <span class="subj">Cost centre list<span class="by"> &middot; Sam Lee</span></span> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
 <div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-budget">Go to Maple Lantern &rsaquo; Budget 2027</a></p></div>
 </details></li>
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
+<li class="item" data-no="3" data-request="20261025T205000Z--maple-budget--wag001"><details class="row">
+<summary><span class="no">3.</span> <span class="tag soon">In 4 days</span> <span class="subj">Wage assumptions</span> <span class="side">Maple Lantern &rsaquo; Budget 2027</span></summary>
 <div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-budget">Go to Maple Lantern &rsaquo; Budget 2027</a></p></div>
 </details></li>
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
+<li class="item" data-no="4" data-request="20261023T112000Z--maple-campaign--task01"><details class="row">
+<summary><span class="no">4.</span> <span class="tag soon">In 6 days</span> <span class="subj">Invented campaign follow-up</span> <span class="side">Maple Lantern &rsaquo; Campaign</span></summary>
 <div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p><p class="go"><a class="jump" href="#p-maple-campaign">Go to Maple Lantern &rsaquo; Campaign</a></p></div>
 </details></li>
 </ul>
 </section>
 <section class="part">
 <h2>Projects <span class="n">2 with open work, a target or a status</span></h2>
-<div class="heads"><span></span><span>Project and what is next</span><span class="num">Open</span><span>Next due</span><span>Last activity</span></div>
+<div class="heads"><span></span> <span>Project and what is next</span> <span class="num">Open</span> <span>Next due</span> <span>Last activity</span></div>
 <details class="node parent" id="p-maple-lantern" open>
-<summary><span class="label"><span class="pname">Maple Lantern</span><span class="next">Next: Cost centre list &middot; Budget 2027 &middot; Sam Lee</span></span><span class="num">3</span><span class="due"><span class="tag late">2 days late</span></span><span class="last">Yesterday</span></summary>
+<summary><span class="label"><span class="pname">Maple Lantern</span> <span class="next">Next: Cost centre list &middot; Budget 2027 &middot; Sam Lee</span></span> <span class="num">3</span> <span class="due"><span class="tag late">2 days late</span></span> <span class="last">Yesterday</span></summary>
 <div class="body">
 <details class="node" id="p-maple-budget">
-<summary><span class="label"><span class="pname">Budget 2027</span><span class="status">Waiting on the owner&#39;s wage sign-off &middot; 29 Oct 2026</span><span class="fact">Owner Ana Ruiz &middot; Target <span>27 Nov 2026, in 28 days</span></span><span class="next">Next: Cost centre list &middot; Sam Lee</span></span><span class="num">2</span><span class="due"><span class="tag late">2 days late</span></span><span class="last">Yesterday</span></summary>
+<summary><span class="label"><span class="pname">Budget 2027</span> <span class="status">Waiting on the owner&#39;s wage sign-off &middot; 29 Oct 2026</span> <span class="fact">Owner Ana Ruiz &middot; Target <span>27 Nov 2026, in 28 days</span></span> <span class="next">Next: Cost centre list &middot; Sam Lee</span></span> <span class="num">2</span> <span class="due"><span class="tag late">2 days late</span></span> <span class="last">Yesterday</span></summary>
 <div class="body">
 <p class="group">With you</p>
 <ul class="rows">
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 4 days</span><span class="subj">Wage assumptions</span><span class="side"></span></summary>
+<li class="item" data-no="3" data-request="20261025T205000Z--maple-budget--wag001"><details class="row">
+<summary><span class="no">3.</span> <span class="tag soon">In 4 days</span> <span class="subj">Wage assumptions</span> <span class="side"></span></summary>
 <div class="more"><p class="text">Owner to sign off the wage assumptions so Ana can finish the staff costs.</p><p class="meta">Owed by you &middot; for Ana Ruiz &middot; due 3 Nov 2026 &middot; open</p></div>
 </details></li>
 </ul>
 <p class="group">With Sam Lee</p>
 <ul class="rows">
-<li class="item"><details class="row">
-<summary><span class="tag late">2 days late</span><span class="subj">Cost centre list</span><span class="side"></span></summary>
+<li class="item" data-no="2" data-request="20261025T204000Z--maple-budget--csl001"><details class="row">
+<summary><span class="no">2.</span> <span class="tag late">2 days late</span> <span class="subj">Cost centre list</span> <span class="side"></span></summary>
 <div class="more"><p class="text">Sam to send the cost centre list for the &lt;Drivers &amp; Inputs&gt; tab.</p><p class="meta">Owed by Sam Lee &middot; for you &middot; due 28 Oct 2026 &middot; open</p></div>
 </details></li>
 </ul>
 </div>
 </details>
 <details class="node" id="p-maple-campaign">
-<summary><span class="label"><span class="pname">Campaign</span><span class="next">Next: Invented campaign follow-up</span></span><span class="num">1</span><span class="due"><span class="tag soon">In 6 days</span></span><span class="last">6 days ago</span></summary>
+<summary><span class="label"><span class="pname">Campaign</span> <span class="next">Next: Invented campaign follow-up</span></span> <span class="num">1</span> <span class="due"><span class="tag soon">In 6 days</span></span> <span class="last">6 days ago</span></summary>
 <div class="body">
 <p class="group">No person named</p>
 <ul class="rows">
-<li class="item"><details class="row">
-<summary><span class="tag soon">In 6 days</span><span class="subj">Invented campaign follow-up</span><span class="side"></span></summary>
+<li class="item" data-no="4" data-request="20261023T112000Z--maple-campaign--task01"><details class="row">
+<summary><span class="no">4.</span> <span class="tag soon">In 6 days</span> <span class="subj">Invented campaign follow-up</span> <span class="side"></span></summary>
 <div class="more"><p class="text">Status: open. Review the invented page with the owner.</p><p class="meta">No person named &middot; due 5 Nov 2026 &middot; open</p></div>
 </details></li>
 </ul>

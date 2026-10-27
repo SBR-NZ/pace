@@ -511,7 +511,7 @@ class Folder:
             if not current:
                 continue
             if len(chain["current"]) > 1:
-                out["two_ways"].append([self.entry(stem) for stem in chain["current"]])
+                out["two_ways"].append([dict(self.entry(stem), first=chain["first"]) for stem in chain["current"]])
                 continue
             item = self.entry(current[0])
             item["first"] = chain["first"]
@@ -665,24 +665,71 @@ def meta_text(folder: Folder, item: dict) -> str:
     return DOT.join(parts)
 
 
-def item_row(folder: Folder, item: dict, side: str = "", by: bool = True, jump: str = "") -> list:
-    """One open item as one line, its record's own words and who, when and its state inside.
+# Numbers. On a page, each open item and each item recorded two ways has a number, so the owner can name it in chat,
+# such as "3 is done". It is given the first time the item is shown, in this order: recorded two ways, Needs attention,
+# then the rows from the top, and the item keeps it wherever else it appears on the page. Done and cancelled items have
+# none. The numbers belong to that page, which keeps each one's request id, so a later chat finds the same item.
+
+def start_numbers(folder: Folder) -> None:
+    folder.numbers, folder.numbered = {}, []
+
+
+def number_of(folder: Folder, accounts: list, give: bool = True):
+    """The number of the item these accounts are, given the first time when `give`; None when it has none."""
+    numbers = getattr(folder, "numbers", None)
+    if numbers is None:
+        return None
+    first = accounts[0]
+    key = first.get("first") or first["request"]
+    if key not in numbers and give:
+        numbers[key] = len(numbers) + 1
+        folder.numbered.append({"number": numbers[key], "request": first["request"] if len(accounts) == 1 else None,
+                                "requests": [account["request"] for account in accounts], "subject": first["subject"],
+                                "project": folder.label(first["project"])})
+    return numbers.get(key)
+
+
+def number_cell(folder: Folder, number) -> str:
+    """The line's first cell, such as 3., empty for a line with no number. A customised template whose styles predate
+    numbers has no such column, so there the number starts the subject instead."""
+    if getattr(folder, "number_column", True):
+        return f'<span class="no">{f"{number}." if number else ""}</span>'
+    return ""
+
+
+def number_inline(folder: Folder, number) -> str:
+    return f'<span class="no">{number}.</span> ' if number and not getattr(folder, "number_column", True) else ""
+
+
+def cells(*parts: str) -> str:
+    """A line's cells with a space between, so the page's text reads "3. 2 days late Board pack" rather than running
+    the number, tag and subject together; the page's grid ignores the spaces."""
+    return " ".join(part for part in parts if part)
+
+
+def item_row(folder: Folder, item: dict, side: str = "", by: bool = True, jump: str = "", give: bool = True) -> list:
+    """One open item as one line, its number first, its record's own words and who, when and its state inside.
 
     `jump`, when given, is the id of its project's row; the link to it sits inside the opened line, never in the line
-    itself, which is already a control that opens and closes."""
+    itself, which is already a control that opens and closes. A line that may not give a number (`give` false) shows
+    the item's number only when it already has one."""
+    number = number_of(folder, [item], give) if item["state"] not in ("done", "cancelled") else None
+    data = f' data-no="{number}" data-request="{esc(item["request"])}"' if number else ""
     owed = f'<span class="by">{DOT}{esc(item["owed"])}</span>' if by and someone_else(folder, item["owed"]) else ""
     text = f'<p class="text">{esc(item["text"])}</p>' if item["text"] else ""
     go = f'<p class="go"><a class="jump" href="#{jump}">Go to {side or "its row"}</a></p>' if jump else ""
-    return ['<li class="item"><details class="row">',
-            f'<summary>{tag(folder, item)}<span class="subj">{esc(item["subject"])}{owed}</span><span class="side">{side}</span></summary>',
+    subject = f'<span class="subj">{number_inline(folder, number)}{esc(item["subject"])}{owed}</span>'
+    line = cells(number_cell(folder, number), tag(folder, item), subject, f'<span class="side">{side}</span>')
+    return [f'<li class="item"{data}><details class="row">', f"<summary>{line}</summary>",
             f'<div class="more">{text}<p class="meta">{meta_text(folder, item)}</p>{go}</div>',
             "</details></li>"]
 
 
-def record_row(label: str, item: dict, side: str, meta: str) -> list:
+def record_row(folder: Folder, label: str, item: dict, side: str, meta: str) -> list:
     text = f'<p class="text">{esc(item["text"])}</p>' if item["text"] else ""
-    return ['<li class="item"><details class="row">',
-            f'<summary><span class="tag">{label}</span><span class="subj">{esc(item["subject"])}</span><span class="side">{side}</span></summary>',
+    line = cells(number_cell(folder, None), f'<span class="tag">{label}</span>', f'<span class="subj">{esc(item["subject"])}</span>',
+                 f'<span class="side">{side}</span>')
+    return ['<li class="item"><details class="row">', f"<summary>{line}</summary>",
             f'<div class="more">{text}<p class="meta">{meta}</p></div>',
             "</details></li>"]
 
@@ -772,7 +819,7 @@ def week_lines(folder: Folder, week: dict, below: str = "") -> list:
             side = trail(folder, item["project"], below)
             if key == "moved":
                 side += f"{DOT}was {short_day(item['was'], folder.today) if item['was'] else 'no date'}"
-            found += item_row(folder, item, side)
+            found += item_row(folder, item, side, give=False)
         lines += [f'<p class="group">{heading}</p>'] + rows(found)
     return lines + ["</div>", "</details>"]
 
@@ -784,8 +831,12 @@ def two_ways_lines(folder: Folder, groups: list, below: str = "") -> list:
              '<p class="lede">Each of these has two current accounts. Ask the owner which stands.</p>', '<ul class="rows">']
     for accounts in groups:
         first = accounts[0]
-        lines += ['<li class="pair">', f'<p><strong>{esc(first["subject"])}</strong> <span class="side">{trail(folder, first["project"], below)}</span></p>',
-                  '<ol class="accounts">']
+        number = number_of(folder, accounts)
+        data = (f' data-no="{number}" data-requests="{esc(" ".join(account["request"] for account in accounts))}"'
+                if number else "")
+        shown = f'<span class="no">{number}.</span> ' if number else ""
+        lines += [f'<li class="pair"{data}>', f'<p>{shown}<strong>{esc(first["subject"])}</strong> <span class="side">'
+                  f'{trail(folder, first["project"], below)}</span></p>', '<ol class="accounts" type="a">']
         for item in accounts:
             lines += ['<li class="item">', f'<p class="text">{esc(item["text"])}</p>', f'<p class="meta">{meta_text(folder, item)}</p>', "</li>"]
         lines += ["</ol>", "</li>"]
@@ -930,7 +981,7 @@ def node_summary(folder: Folder, pid: str, label: str, mine: list, pids: list, o
     """A row's line: the project, its status, owner and target, what is next, its open count, next due date and last record.
     The row of a project's own work (`own`) leaves out the project's facts, which its parent row gives."""
     facts = {} if own else folder.facts().get(pid, {})
-    bits = [f'<span class="pname">{label}</span>']
+    bits = [f'<span class="pname">{label}</span>']  # joined with spaces, as the cells are, for the page's text
     if facts.get("status"):
         bits.append(f'<span class="status">{fact_text(folder, "status", facts["status"])}</span>')
     known = []
@@ -944,8 +995,9 @@ def node_summary(folder: Folder, pid: str, label: str, mine: list, pids: list, o
     bits.append(f'<span class="next">{lead_text(folder, mine, pid)}</span>')
     dated = [item["due"] for item in mine if item["due"]]
     due = due_tag(folder, min(dated)) if dated else f'<span class="tag empty">{"No date" if mine else "None"}</span>'
-    return (f'<summary><span class="label">{"".join(bits)}</span><span class="num">{len(mine)}</span>'
-            f'<span class="due">{due}</span><span class="last">{last_text(folder, pids)}</span></summary>')
+    line = cells(f'<span class="label">{" ".join(bits)}</span>', f'<span class="num">{len(mine)}</span>',
+                 f'<span class="due">{due}</span>', f'<span class="last">{last_text(folder, pids)}</span>')
+    return f"<summary>{line}</summary>"
 
 
 def node_lines(folder: Folder, pid: str, items: list, kids: dict) -> list:
@@ -980,7 +1032,7 @@ def jump_targets(items: list, kids: dict, shown) -> dict:
     return targets
 
 
-HEADS = ('<div class="heads"><span></span><span>{first}</span><span class="num">{count}</span><span>Next due</span>'
+HEADS = ('<div class="heads"><span></span> <span>{first}</span> <span class="num">{count}</span> <span>Next due</span> '
          '<span>{last}</span></div>')
 
 
@@ -999,13 +1051,9 @@ def every_project_view(folder: Folder) -> dict:
     idle = sorted((pid for pid in folder.projects if pid not in tree and pid not in disputed),
                   key=lambda pid: folder.label(pid).casefold())
 
-    lines = ["<!-- start: every project view -->", '<section class="view">']
-    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
-    week = folder.week()
-    lines += week_lines(folder, week)
-    lines += two_ways_lines(folder, work["two_ways"])
-    lines += attention_lines(folder, items, targets=jump_targets(items, kids, tree))
-    lines += ['<section class="part">', f'<h2>Projects <span class="n">{len(listed)} with open work, a target or a status</span></h2>']
+    start_numbers(folder)
+    numbered = two_ways_lines(folder, work["two_ways"]) + attention_lines(folder, items, targets=jump_targets(items, kids, tree))
+    lines = ['<section class="part">', f'<h2>Projects <span class="n">{len(listed)} with open work, a target or a status</span></h2>']
     if tops:
         lines.append(HEADS.format(first="Project and what is next", count="Open", last="Last activity"))
         for pid in tops:
@@ -1018,8 +1066,12 @@ def every_project_view(folder: Folder) -> dict:
         lines.append(f'<p class="quiet">Folders with no Pace project.md: {esc(", ".join(folder.unlabelled))}. '
                      "Ask the owner what each one is.</p>")
     lines += ["</section>", "</section>", "<!-- end: every project view -->"]
+    week = folder.week()
+    lines = (["<!-- start: every project view -->", '<section class="view">']
+             + summary_lines(folder, counts, len(set(item["project"] for item in items))) + week_lines(folder, week)
+             + numbered + lines)
     return {"head": [], "lines": lines, "work": work, "counts": counts, "week": week, "heading": "All projects",
-            "title": "Project overview", "suffix": ""}
+            "title": "Project overview", "suffix": "", "numbers": folder.numbered}
 
 
 def one_project_view(folder: Folder, pid: str) -> dict:
@@ -1041,7 +1093,7 @@ def one_project_view(folder: Folder, pid: str) -> dict:
             facts.append(f"{word} <strong{late}>{fact_text(folder, key, found[key])}</strong>")
     facts.append(f"Last recorded <strong>{day_and_age(folder.last_recorded(set(family)), folder.today)}</strong>")
     head = [f'<p class="lead">{esc(plain(entry.get("purpose", "")) or "Purpose not recorded")}</p>',
-            '<p class="known">' + "".join(f"<span>{fact}</span>" for fact in facts) + "</p>"]
+            '<p class="known">' + " ".join(f"<span>{fact}</span>" for fact in facts) + "</p>"]
 
     # The rows show when a project inside this one has open work, a target or a status.
     tracked = [child for child in family if folder.facts().get(child, {}).get("target") or folder.facts().get(child, {}).get("status")]
@@ -1052,11 +1104,8 @@ def one_project_view(folder: Folder, pid: str) -> dict:
         if any(item["kind"] == "action" for item in accounts):
             for item in accounts:
                 disputed |= {item["project"], *folder.ancestors(item["project"])}
-    lines = ["<!-- start: one project view -->", '<section class="view">']
-    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
-    week = folder.week(set(family))
-    lines += week_lines(folder, week, pid)
-    lines += two_ways_lines(folder, work["two_ways"], pid)
+    start_numbers(folder)
+    lines = two_ways_lines(folder, work["two_ways"], pid)
     if kids.get(pid):
         targets = jump_targets(items, kids, shown)
         lines += attention_lines(folder, items, pid, targets)
@@ -1105,7 +1154,7 @@ def one_project_view(folder: Folder, pid: str) -> dict:
                 meta = when + DOT + esc(item["state"])
             else:
                 meta = when
-            found_rows += record_row(label, item, side, meta)
+            found_rows += record_row(folder, label, item, side, meta)
         lines += rows(found_rows) + ["</section>"]
     places = []
     documents = folder.pace / entry["folder"] / pr.WORKING_DIR
@@ -1135,8 +1184,12 @@ def one_project_view(folder: Folder, pid: str) -> dict:
     else:
         lines.append('<p class="quiet">Documents and repository references: none.</p>')
     lines += ["</section>", "</section>", "<!-- end: one project view -->"]
+    week = folder.week(set(family))
+    lines = (["<!-- start: one project view -->", '<section class="view">']
+             + summary_lines(folder, counts, len(set(item["project"] for item in items))) + week_lines(folder, week, pid)
+             + lines)
     return {"head": head, "lines": lines, "work": work, "counts": counts, "week": week, "heading": folder.name_of(pid),
-            "title": folder.name_of(pid), "suffix": f"-{pid}"}
+            "title": folder.name_of(pid), "suffix": f"-{pid}", "numbers": folder.numbered}
 
 
 def by_person_view(folder: Folder) -> dict:
@@ -1157,12 +1210,8 @@ def by_person_view(folder: Folder) -> dict:
             where += (DOT if where else "") + f"for {person(folder, item['for'])}"
         return where
 
-    lines = ["<!-- start: by person view -->", '<section class="view">']
-    lines += summary_lines(folder, counts, len(set(item["project"] for item in items)))
-    week = folder.week()
-    lines += week_lines(folder, week)
-    lines += two_ways_lines(folder, work["two_ways"])
-    lines += attention_lines(folder, items)
+    start_numbers(folder)
+    lines = two_ways_lines(folder, work["two_ways"]) + attention_lines(folder, items)
     lines += ['<section class="part">', f'<h2>People <span class="n">{len(order)}</span></h2>']
     if order:
         lines.append(HEADS.format(first="Person and what is next", count="Owes", last="Waiting for" if anyone_waits else ""))
@@ -1178,9 +1227,10 @@ def by_person_view(folder: Folder) -> dict:
         else:
             lead = "Owes nothing recorded"
         due = due_tag(folder, min(dated)) if dated else f'<span class="tag empty">{"No date" if owes else "None"}</span>'
-        lines += [f'<details class="node person"{" open" if key == "you" else ""}>',
-                  f'<summary><span class="label"><span class="pname">{esc(found["name"])}</span><span class="next">{lead}</span></span>'
-                  f'<span class="num">{len(owes)}</span><span class="due">{due}</span><span class="last">{len(waits) or ""}</span></summary>',
+        line = cells(f'<span class="label"><span class="pname">{esc(found["name"])}</span> <span class="next">{lead}</span></span>',
+                     f'<span class="num">{len(owes)}</span>', f'<span class="due">{due}</span>',
+                     f'<span class="last">{len(waits) or ""}</span>')
+        lines += [f'<details class="node person"{" open" if key == "you" else ""}>', f"<summary>{line}</summary>",
                   '<div class="body">']
         owes_word = "You owe" if key == "you" else "Owes"
         with_dates = [item for item in owes if item["due"]]
@@ -1210,16 +1260,21 @@ def by_person_view(folder: Folder) -> dict:
         lines += ["</div>", "</details>"]
     nobody = sorted((item for item in items if not item["owed"]), key=folder.order)
     if nobody:
-        lines += ['<details class="node person">',
-                  '<summary><span class="label"><span class="pname">No person named</span><span class="next">Open work that names no one who owes it</span></span>'
-                  f'<span class="num">{len(nobody)}</span><span class="due"></span><span class="last"></span></summary>', '<div class="body">']
+        line = cells('<span class="label"><span class="pname">No person named</span> <span class="next">Open work that names no one '
+                     'who owes it</span></span>', f'<span class="num">{len(nobody)}</span>', '<span class="due"></span>',
+                     '<span class="last"></span>')
+        lines += ['<details class="node person">', f"<summary>{line}</summary>", '<div class="body">']
         lines += rows([line for item in nobody for line in item_row(folder, item, trail(folder, item["project"]))])
         lines += ["</div>", "</details>"]
     if not order and not nobody:
         lines.append('<p class="none">No open work recorded.</p>')
     lines += ["</section>", "</section>", "<!-- end: by person view -->"]
+    week = folder.week()
+    lines = (["<!-- start: by person view -->", '<section class="view">']
+             + summary_lines(folder, counts, len(set(item["project"] for item in items))) + week_lines(folder, week)
+             + lines)
     return {"head": [], "lines": lines, "work": work, "counts": counts, "week": week, "heading": "By person",
-            "title": "Project overview by person", "suffix": "-by-person"}
+            "title": "Project overview by person", "suffix": "-by-person", "numbers": folder.numbered}
 
 
 # ---------------------------------------------------------------- the page
@@ -1337,6 +1392,16 @@ def template_parts(text: str) -> dict:
 
 # The styles a page of this design needs; a customised template whose style block has none of them predates it.
 CURRENT_STYLES = (".node", ".row", ".tag", ".summary")
+
+
+def number_column(style: str) -> bool:
+    """True when the style's line grid has a first column for the number: its `.row > summary` rule lays out four
+    columns or more. A customised template made before numbers lays out three, even once its `.no` rules are carried
+    over, and there the number starts the subject instead, so the line never spills out of its grid."""
+    rule = re.search(r"\.row\s*>\s*summary\s*\{([^}]*)\}", style)
+    columns = re.search(r"grid-template-columns\s*:\s*([^;]*)", rule.group(1)) if rule else None
+    tracks = re.findall(r"[\w.%-]*\([^)]*\)|[^\s()]+", columns.group(1)) if columns else []
+    return len(tracks) >= 4
 
 
 def build_page(folder: Folder, parts: dict, view: dict, title: str, asked: str, searched: str, could_not_read: str) -> str:
@@ -1476,6 +1541,7 @@ def _run(args) -> tuple:
                           "styles could not be read, so the page may look unstyled; compare the customised copy with the "
                           "shipped template and carry over its styles.")
 
+    folder.number_column = number_column(parts["style"])
     if args.project:
         kind = "one project"
         view = one_project_view(folder, args.project)
@@ -1494,27 +1560,31 @@ def _run(args) -> tuple:
     title = f"{view['title']}, {short_date(folder.today)}"
     page = build_page(folder, parts, view, title, args.asked or default_asked, searched, could_not_read)
 
-    attention = [{"project": folder.label(item["project"]), "subject": item["subject"], "owed_by": item["owed"] or None,
-                  "due": item["due"].isoformat(), "when": how_soon(item["due"], folder.today), "request": item["request"]}
+    attention = [{"number": number_of(folder, [item], give=False), "project": folder.label(item["project"]),
+                  "subject": item["subject"], "owed_by": item["owed"] or None, "due": item["due"].isoformat(),
+                  "when": how_soon(item["due"], folder.today), "request": item["request"]}
                  for item in folder.needs_attention(work["open"])]
-    two_ways = [[{"project": folder.label(item["project"]), "subject": item["subject"], "request": item["request"]}
-                 for item in accounts] for accounts in work["two_ways"]]
+    two_ways = [[{"number": number_of(folder, accounts, give=False), "project": folder.label(item["project"]),
+                  "subject": item["subject"], "request": item["request"]} for item in accounts] for accounts in work["two_ways"]]
     week = {"new": len(view["week"]["new"]), "done": len(view["week"]["done"]), "cancelled": len(view["week"]["cancelled"]),
             "due_date_changed": len(view["week"]["moved"])}
+    # Every number comes last: the list is as long as the open work, and a host that shows only the start of a long
+    # result still sees whether the search was complete.
     summary = {"view": kind, "as_at": long_moment(folder.now), "counts": counts, "last_7_days": week,
                "needs_attention": attention, "recorded_two_ways": two_ways, "searched": searched,
                "could_not_read": could_not_read, "complete": not folder.problems, "housekeeping": folder.notes,
                "time_zone": folder.zone_name, "owner_names": sorted(folder.owner_names),
-               "folders_without_id": folder.unlabelled}
+               "folders_without_id": folder.unlabelled, "numbers": view["numbers"]}
     glance = (f"{counts['open']} open: {counts['overdue']} overdue, {counts['due_today']} due today, "
               f"{counts['due_next_7_days']} due in the next {SOON_DAYS} days, {counts['waiting_on_you']} waiting on you, "
               f"{counts['waiting_on_others']} waiting on others and {counts['recorded_two_ways']} recorded two ways.")
+    partial = " Partial: something could not be read; see could_not_read." if folder.problems else ""
     if not args.save:
-        return pr.result("made", f"Overview made, not saved (no --save). As at {summary['as_at']}. {glance}{notes}{style_note}",
-                         True, page=None, **summary)
+        return pr.result("made", f"Overview made, not saved (no --save).{partial} As at {summary['as_at']}. {glance}{notes}"
+                         f"{style_note}", True, page=None, **summary)
     name = f"{folder.today.isoformat()}-project-overview{suffix}"
     status, path, said = save_page(folder, name, page)
-    return pr.result(status, f"{said} As at {summary['as_at']}. {glance}{notes}{style_note}", status == "saved",
+    return pr.result(status, f"{said}{partial} As at {summary['as_at']}. {glance}{notes}{style_note}", status == "saved",
                      page=pr.rel(pace, path) if path else None, **summary)
 
 

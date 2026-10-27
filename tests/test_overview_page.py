@@ -49,7 +49,9 @@ TINTS = {"#f2ebe2", "#5e5068", "#3f3248", "#c9bad6", "#5a4a66", "#ffffff", "#4b3
 COMMON_ATTRIBUTES = {"lang", "charset", "name", "content", "class"}
 TAG_ATTRIBUTES = {
     "details": {"class", "open", "id"},
+    "li": {"class", "data-no", "data-request", "data-requests"},  # a numbered line's number and request id, never shown
     "a": {"class", "href"},
+    "ol": {"class", "type"},  # an item recorded two ways letters its accounts, so they never look like its number
     "svg": {"class", "viewbox", "role", "aria-label"},
     "path": {"d", "transform", "fill"},
     "rect": {"x", "y", "width", "height", "fill"},
@@ -180,6 +182,11 @@ class Page(HTMLParser):
                 self.jumps.append(value)
             if name == "id":
                 self.ids.append(value)
+            if name == "data-no" and not re.fullmatch(r"[1-9]\d*|\{\{its number\}\}", value or ""):
+                self.problems.append(f"a number that is not a number: {value}")
+            if name in ("data-request", "data-requests") and not re.fullmatch(
+                    r"\d{8}T\d{6}Z--[a-z0-9-]+--[a-z0-9]{6}( \d{8}T\d{6}Z--[a-z0-9-]+--[a-z0-9]{6})*|\{\{[^}]+\}\}", value or ""):
+                self.problems.append(f"{name} that is not request ids: {value}")
         self.tags.append((tag, values))
         return values
 
@@ -410,7 +417,7 @@ class TemplateTests(unittest.TestCase):
         self.assertIn(".tag { white-space: normal; }", narrow)
         self.assertIn("h1, .lead, .known, .sub, .meta, .group, .quiet, .none, .fold > summary, .week > summary { overflow-wrap: anywhere; }", style)
         # The row of a project's own work gives no facts: the row above it does.
-        self.assertNotIn('<span class="itself">itself</span></span><span class="status">', read(TEMPLATE))
+        self.assertNotIn('<span class="itself">itself</span></span> <span class="status">', read(TEMPLATE))
 
     def test_escaping_rules_make_record_text_plain_text(self):
         rules = template_rules()
@@ -583,9 +590,12 @@ class ExamplePageTests(unittest.TestCase):
         self.assertNotIn(po.esc(" ".join(first.split())), self.text)
 
     def test_pages_show_no_record_references(self):
-        self.assertNotRegex(self.text, r"\bRecord \d{8}T\d{6}Z")
+        # A numbered line keeps its request id in data-request, so a later chat can find it by its number; it is
+        # never shown on the page.
+        shown = re.sub(r' data-requests?="[^"]*"', "", self.text)
+        self.assertNotRegex(shown, r"\d{8}T\d{6}Z--")
         self.assertNotIn('class="ref"', self.text)
-        self.assertNotIn("request id", read(TEMPLATE))
+        self.assertNotIn("{{the request id", re.sub(r' data-requests?="[^"]*"', "", read(TEMPLATE)))
 
     def test_example_page_puts_what_is_late_first(self):
         start = self.text.index("<h2>Needs attention")
@@ -603,7 +613,7 @@ class ExamplePageTests(unittest.TestCase):
         self.assertIn('<summary>Last 7 days: <strong>3</strong> new &middot; <strong>1</strong> done</summary>', self.text)
         projects = self.text[self.text.index("<h2>Projects"):]
         self.assertIn('<details class="node parent" id="p-maple-lantern" open>', projects)
-        self.assertIn('<span class="pname">Budget 2027</span><span class="status">', projects)
+        self.assertIn('<span class="pname">Budget 2027</span> <span class="status">', projects)
 
     def test_example_page_escapes_record_text(self):
         record = read(EXAMPLE / "Record/20261025T204000Z--maple-budget--csl001.md")

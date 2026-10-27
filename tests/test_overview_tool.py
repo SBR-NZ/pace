@@ -530,10 +530,10 @@ class PageTests(OverviewCase):
         order = [text.index(f'id="{ident}"') for ident in ("p-kowhai", "p-kowhai--own", "p-kowhai-budget", "p-kowhai-site", "p-pohutu")]
         self.assertEqual(order, sorted(order))
         # Next due is the earliest date of the project's open work, overdue or not, and a parent's takes in its projects.
-        self.assertIn('<span class="num">3</span><span class="due"><span class="tag late">3 days late</span></span>', self.row(text, self.client))
+        self.assertIn('<span class="num">3</span> <span class="due"><span class="tag late">3 days late</span></span>', self.row(text, self.client))
         self.assertIn('<span class="due"><span class="tag late">3 days late</span></span>', self.row(text, self.budget))
         self.assertIn('<span class="due"><span class="tag soon">In 2 days</span></span>', self.row(text, self.site))
-        self.assertIn('<span class="num">1</span><span class="due"><span class="tag empty">No date</span></span>', self.row(text, self.solo))
+        self.assertIn('<span class="num">1</span> <span class="due"><span class="tag empty">No date</span></span>', self.row(text, self.solo))
         self.assertIn('<span class="pname">Kowhai Books <span class="itself">itself</span></span>', self.row(text, self.client, own=True))
         self.assertNotIn("No open work recorded", text)
 
@@ -577,7 +577,7 @@ class PageTests(OverviewCase):
         self.assertIn("<title>Kowhai Books, 2 Nov 2026 - Pace by SBR</title>", text)
         self.assertIn("Use the two-page layout.", text)
         self.assertIn("Ana now owns the model.", text)
-        self.assertIn('<span class="tag">Decided</span><span class="subj">Chosen layout</span>', text)
+        self.assertIn('<span class="tag">Decided</span> <span class="subj">Chosen layout</span>', text)
         self.assertNotIn("Too old to show.", text)
         self.assertNotIn("Not this one", text)
         self.assertIn("<!-- start: one project view -->", text)
@@ -703,10 +703,10 @@ class LineTests(OverviewCase):
         f.action(self.budget, "Fresh", created="2026-10-20T09:00:00+13:00")  # 13 days
         dated = f.action(self.budget, "Dated", due="2026-11-20", created="2026-10-01T09:00:00+13:00")
         text = self.page(f.run("--save")[0])
-        self.assertIn('<span class="tag age">Open 14 days</span><span class="subj">Old mine</span>', text)
-        self.assertIn('<span class="tag age">Waiting 21 days</span><span class="subj">Old theirs</span>', text)
-        self.assertIn('<span class="tag"></span><span class="subj">Fresh</span>', text)
-        self.assertIn('<span class="tag">20 Nov</span><span class="subj">Dated</span>', text)  # a due date comes before age
+        self.assertIn('<span class="tag age">Open 14 days</span> <span class="subj">Old mine</span>', text)
+        self.assertIn('<span class="tag age">Waiting 21 days</span> <span class="subj">Old theirs</span>', text)
+        self.assertIn('<span class="tag"></span> <span class="subj">Fresh</span>', text)
+        self.assertIn('<span class="tag">20 Nov</span> <span class="subj">Dated</span>', text)  # a due date comes before age
         self.assertIn("Next: Dated", self.row(text, self.budget))
         self.assertIn("Oldest open: Old theirs &middot; Sam Lee &middot; open 21 days", self.row(text, self.site))
         # With nothing dated, a row's line is its oldest open item, with its age once that is 14 days or more.
@@ -730,8 +730,8 @@ class LineTests(OverviewCase):
         week_part = text[text.index('<details class="week">'):text.index("<h2>Needs attention")]
         self.assertIn("<summary>Last 7 days: <strong>1</strong> new &middot; <strong>1</strong> done &middot; "
                       "<strong>1</strong> cancelled &middot; <strong>1</strong> due date changed</summary>", week_part)
-        self.assertIn('<span class="tag">Done</span><span class="subj">Done this week</span>', week_part)
-        self.assertIn('<span class="tag">Cancelled</span><span class="subj">Cancelled this week</span>', week_part)
+        self.assertIn('<span class="tag">Done</span> <span class="subj">Done this week</span>', week_part)
+        self.assertIn('<span class="tag">Cancelled</span> <span class="subj">Cancelled this week</span>', week_part)
         self.assertIn("Kowhai Books &rsaquo; Website &middot; was 1 Nov", week_part)
         self.assertNotIn("Old work", week_part)
         # One project's page counts only its own last 7 days; with nothing, it says so in one line.
@@ -859,7 +859,7 @@ class ReviewTests(OverviewCase):
         f.action(self.budget, "Budget task")
         text = self.page(f.run("--save", "--project", self.client)[0])
         attention = text[text.index("<h2>Needs attention"):text.index("<h2>Projects")]
-        self.assertIn('<span class="subj">Client late</span><span class="side"></span>', attention)
+        self.assertIn('<span class="subj">Client late</span> <span class="side"></span>', attention)
         self.assertIn('<a class="jump" href="#p-kowhai--own">Go to its row</a>', attention)
         self.assertEqual(Page(text).problems, [])
 

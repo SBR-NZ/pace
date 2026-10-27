@@ -32,7 +32,7 @@ When a piece of work is finished, or the owner says they are done, list anything
 
 ## Add-in index
 
-Each line below the mark is one add-in that is switched on: its name, its one-line purpose and the file to open. An add-in not listed is off. No add-in file is opened at the start of a chat; the one a request needs is opened then, and its steps apply only to that request. If two lines fit, ask which; if a listed file is missing, say so rather than using another. [Add-ins](Product/Help/add-ins.md) lists the shipped add-ins and explains how to switch one on, customise it or make your own. When the owner asks to set up Pace, offer Getting started.
+Each line below the mark is one add-in that is switched on: its name, its one-line purpose and the file to open. An add-in not listed is off. No add-in file is opened at the start of a chat; the one a request needs is opened then, and its steps apply only to that request. If two lines fit, ask which; if a listed file is missing, say so rather than using another. When the owner names items by number, such as "3 is done", the numbers belong to the list or page they came from: a weekly review's list, which lasts only for its chat, or a Project overview page in `2 Views/`; ask if it could be either. [Add-ins](Product/Help/add-ins.md) lists the shipped add-ins and explains how to switch one on, customise it or make your own. When the owner asks to set up Pace, offer Getting started.
 
 <!-- Your lines go below this one. Pace updates never change them. -->
 - **Daily brief** - Gather what needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. `Product/Pace add-ins/Daily brief/ADD-IN.md`
@@ -60,4 +60,4 @@ Time zone: Pacific/Auckland
 - [Product updates](Product/Help/updates.md) - to check for an update, read `Release record/Installed release.md`, then preview the newest release; installing needs the owner's go-ahead.
 - [Assistants and dated views](Product/Help/hosts-and-views.md) - what hosts can actually do, the steps for an assistant that reaches this folder only through a OneDrive connection, the owner's assistant setup and optional pages over records.
 - [Health check](Product/Help/health-check.md) - one read-only check of the whole Pace folder, with what to do about anything it finds.
-<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=42ff4b6c5b38 rounding-up=338f8a57f6ab add-in-index=bd574ef05183 the-owner-s-name=cfc223e0a7d6 time-zone=01475f79d218 help-when-relevant=952dce37ec53 -->
+<!-- Pace parts as shipped, so an update can tell which ones you have changed: intro=eb65672f31bc two-boundaries=a13f85032918 standing-instructions=35393efd3d03 where-things-belong=42ff4b6c5b38 rounding-up=338f8a57f6ab add-in-index=b3906488b2d4 the-owner-s-name=cfc223e0a7d6 time-zone=01475f79d218 help-when-relevant=952dce37ec53 -->

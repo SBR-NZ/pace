@@ -18,7 +18,7 @@ When the owner asks for a weekly review, to go through or tidy up open work, or 
 1. Say the "as at" date and time zone of the review.
 2. Make the review list. **If you can run Python**, use the overview tool's review list, following "The overview tool" in [Assistants and dated views](../../Help/hosts-and-views.md). **Otherwise**, search the record for open actions as [Records and source evidence](../../Help/records.md) describes, follow each one to its current account, and sort them as below.
 3. If something could not be read, say first that the list is partial.
-4. Show the list in these groups, leaving out any that are empty. Number the items from 1 across the whole list, one line each: how late, how soon or how long open it is, its subject, its project, and who owes it when that is not the owner.
+4. Show the list in these groups, leaving out any that are empty. Number the items from 1 across the whole list, one line each: how late, how soon or how long open it is, its subject, its project, and who owes it when that is not the owner. These numbers belong to this list; an overview page has its own.
    - **Recorded two ways**: items with competing accounts. Show both accounts and ask which stands.
    - **Overdue**: the longest late first.
    - **Due today and in the next 7 days**: the earliest first.

@@ -26,7 +26,7 @@ These ship in `Product/Pace add-ins/`, each in its own folder, and are all off:
 | --- | --- |
 | Getting started | Setting up a new Pace folder with its owner: their name, time zone, first projects, add-ins and assistants. |
 | Daily brief | What needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. |
-| Project overview | Where one project, every project or one person's work stands, kept as a dated page in `2 Views/` with a short summary in chat. |
+| Project overview | Where one project, every project or one person's work stands, kept as a dated page in `2 Views/` with a short summary in chat; the owner can name its items by their numbers. |
 | Key numbers and changes | Reading agreed key numbers from handed-over files and comparing two versions. |
 | What was reported | The exact words of each reporting occasion, and what was reported, when and to whom. |
 | Reminders | A dated follow-up in the record, and a timed reminder where the host can set one. |
@@ -45,7 +45,7 @@ To switch an add-in on, add its line to the add-in index in `Pace.md`, below the
 ```text
 - **Getting started** - Set up a new Pace folder with its owner: their name, time zone, first projects, add-ins and assistants. `Product/Pace add-ins/Getting started/ADD-IN.md`
 - **Daily brief** - Gather what needs the owner today: decisions, overdue and upcoming work, and what is waiting on them. `Product/Pace add-ins/Daily brief/ADD-IN.md`
-- **Project overview** - Show where one project, every project or one person's work stands. `Product/Pace add-ins/Project overview/ADD-IN.md`
+- **Project overview** - Show where one project, every project or one person's work stands, and act on items the owner names by their numbers on its page. `Product/Pace add-ins/Project overview/ADD-IN.md`
 - **Key numbers and changes** - Read agreed key numbers from handed-over files and compare two versions, like with like. `Product/Pace add-ins/Key numbers and changes/ADD-IN.md`
 - **What was reported** - Keep the exact words of each reporting occasion, and answer what was reported, when and to whom. `Product/Pace add-ins/What was reported/ADD-IN.md`
 - **Reminders** - Keep a dated follow-up in the record and, where the host can, set a timed reminder in its own app. `Product/Pace add-ins/Reminders/ADD-IN.md`
