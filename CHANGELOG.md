@@ -2,6 +2,17 @@
 
 Versions use `MAJOR.MINOR.PATCH`. This file describes repository changes, not an installation receipt or an owner's approval.
 
+## 3.16.1 - Safer record paths through numbered folders
+
+- **A record's path is followed only to a folder of the same kind.** From 3.16.0 the tools follow a path a record wrote through folders numbered since, by each folder's name after its number. They now take only a folder of the same kind:
+  - A project's `Documents/` is followed only to its own `01. Documents/`, directly in the project's folder. 3.16.0 could take a folder of the owner's own, such as `07. Documents/`, when the project's own was gone.
+  - A folder of the owner's own named Documents, such as `Sources/Documents/` numbered by hand as `Sources/02. Documents/`, is followed as a folder of the owner's own.
+  - A folder still there under the name the record wrote, in any letter case or Unicode form, is used first. When the rest of the path is not inside it, a numbered one is tried in its place only for a project's `Documents/`, or as a project folder where the folder there is empty, as when OneDrive makes one again under an old name. Unlike 3.16.0, never in place of a project folder, or of a folder of the owner's own that holds anything.
+- **A number changed or taken off by hand is not followed**, as before: nothing says which folder was meant, so two projects of one name, or a copy of a project, could be taken for each other. A confirmation of a file in such a folder reads as not checked and needs the owner's words again.
+- **What a path cannot tell apart.** A path written before numbering holds no numbers, so it can still lead to another project of the same name made since its own was renamed, moved or deleted, as in 3.16.0. And a record finds whichever folder now has the name and number it wrote, such as a new project given the name and number of one moved away.
+- Help: projects, under Numbered folders, says so, that a project's `01. Documents/` keeps its number, that a number should never go to another folder of the same name, nor a new project the name an earlier one there had, what a path written before numbering cannot tell apart, and that renaming `24. Dezember Feier` loses records' paths into it.
+- Tests cover each finding of three independent reviews, two of an earlier attempt to follow numbers changed by hand: two projects of one name holding the same file, a project renamed, moved or deleted, a record of one project naming another's file, numbers swapped, a stale `Documents/` beside `01. Documents/`, and the kinds of Documents folder.
+
 ## 3.16.0 - Numbered project folders
 
 - **Each project folder is numbered**, so it keeps its place as more are added instead of moving with the alphabet. A folder starts with its number, a full stop and a space: at the top of `1 Projects/` from `01.`, and inside a project from `02.`, after the project's `01. Documents/`, as in `01. Kowhai Books/02. Budget 2027/01. Documents/`.

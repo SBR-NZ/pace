@@ -221,6 +221,47 @@ class ReadingTests(Case):
         self.assertEqual(pr.recorded_path(self.pace, "1 Projects/02. SBR/Gone/Brief.txt"),
                          (self.pace / "1 Projects/02. SBR/Gone/Brief.txt").resolve())
 
+    def test_a_number_changed_by_hand_is_not_followed(self):
+        self.new("kowhai", "Kowhai Books")
+        self.new("kowhai-budget", "Budget 2027", "kowhai")
+        letter = self.pace / "1 Projects/01. Kowhai Books/02. Budget 2027/01. Documents/Letter.txt"
+        letter.write_text("Invented letter.\n", encoding="utf-8")
+        recorded = "1 Projects/01. Kowhai Books/02. Budget 2027/01. Documents/Letter.txt"
+        act = {"act-file": [recorded], "act-sha256": [pr.sha256(letter.read_bytes())], "project": ["kowhai-budget"]}
+        (self.pace / "1 Projects/01. Kowhai Books").rename(self.pace / "1 Projects/03. Kowhai Books")
+        # Nothing says which folder 01. Kowhai Books was, so the path is left as written and the act is not checked.
+        self.assertEqual(pr.recorded_path(self.pace, recorded), (self.pace / recorded).resolve())
+        self.assertIn("could not be checked", pr.check_act(self.pace, act))
+        # A path written before numbering names no number, so it still finds the folder by its name after any number.
+        self.assertEqual(pr.recorded_path(self.pace, "1 Projects/Kowhai Books/Budget 2027/Documents/Letter.txt"),
+                         (self.pace / "1 Projects/03. Kowhai Books/02. Budget 2027/01. Documents/Letter.txt").resolve())
+        # A number taken off by hand is not followed either.
+        (self.pace / "1 Projects/03. Kowhai Books/02. Budget 2027").rename(self.pace / "1 Projects/03. Kowhai Books/Budget 2027")
+        later = "1 Projects/03. Kowhai Books/02. Budget 2027/01. Documents/Letter.txt"
+        self.assertEqual(pr.recorded_path(self.pace, later), (self.pace / later).resolve())
+
+    def test_a_documents_folder_stands_in_only_for_its_own_kind(self):
+        self.new("kowhai", "Kowhai Books")
+        client = self.pace / "1 Projects/01. Kowhai Books"
+        (client / "07. Documents").mkdir()
+        (client / "07. Documents/Old letter.txt").write_text("Invented.\n", encoding="utf-8")
+        (client / "01. Documents/Letter.txt").write_text("Invented.\n", encoding="utf-8")
+        # A folder of the owner's own renumbered by hand is not followed.
+        (client / "07. Documents").rename(client / "08. Documents")
+        self.assertEqual(pr.recorded_path(self.pace, "1 Projects/01. Kowhai Books/07. Documents/Old letter.txt"),
+                         (client / "07. Documents/Old letter.txt").resolve())
+        # Nor is the project's own with its number taken off.
+        (client / "01. Documents").rename(client / "Documents")
+        self.assertEqual(pr.recorded_path(self.pace, "1 Projects/01. Kowhai Books/01. Documents/Letter.txt"),
+                         (client / "01. Documents/Letter.txt").resolve())
+        # A project's Documents/ written before numbering finds only its own 01. Documents/, never 08. Documents/.
+        (client / "Documents").rename(client / "01. Documents")
+        self.assertEqual(pr.recorded_path(self.pace, "1 Projects/01. Kowhai Books/Documents/Letter.txt"),
+                         (client / "01. Documents/Letter.txt").resolve())
+        (client / "01. Documents/Letter.txt").rename(client / "08. Documents/Letter.txt")
+        self.assertEqual(pr.recorded_path(self.pace, "1 Projects/01. Kowhai Books/Documents/Letter.txt"),
+                         (client / "Documents/Letter.txt").resolve())
+
 
 class FoldersToolTests(Case):
     def setUp(self):

@@ -1812,7 +1812,8 @@ def act_location(pace: Path, path: str) -> str:
 def recorded_path(pace: Path, recorded: str) -> Path:
     """A path a record wrote, from the Pace folder. One written before a folder on it was numbered still finds its file
     in the numbered folder, so older records never need changing: Projects/ became 1 Projects/ in 3.11.0, and from
-    3.16.0 a project folder or a project's Documents/ may have gained a number, such as 02. Budget 2027/."""
+    3.16.0 a project folder or a project's Documents/ may have gained a number, such as 02. Budget 2027/, as
+    numbered_path describes."""
     path = Path(recorded)
     if not path.is_absolute() and path.parts and path.parts[0] in RENAMED_FOLDERS and not (pace / path).exists():
         path = Path(RENAMED_FOLDERS[path.parts[0]], *path.parts[1:])
@@ -1918,27 +1919,57 @@ def outside_numbering(pace: Path, entry: dict, every: set) -> bool:
 
 
 def numbered_path(pace: Path, path: Path):
-    """The path a record wrote, followed through folders that have since been numbered, such as 1 Projects/Kowhai Books/
-    Documents/a.txt to 1 Projects/01. Kowhai Books/01. Documents/a.txt; None when it leads nowhere, or where more than
-    one numbered folder could be meant. For Documents, the project's own Documents folder is the one; otherwise a
-    project folder comes before an ordinary folder of the same name. A folder still there under the name as written is
-    tried first, and the numbered one when the rest of the path is not inside it, such as an empty folder OneDrive
-    made again under the old name."""
+    """The path a record wrote, followed through folders numbered since it was written, such as 1 Projects/Kowhai Books/
+    Documents/a.txt to 1 Projects/01. Kowhai Books/01. Documents/a.txt; None when it leads nowhere, or where two
+    folders could be meant.
+
+    A name is matched in any letter case and either Unicode form, as the record tool matches names. A folder no longer
+    there under the name as written is looked for beside it as that name after a number, and only as the same kind of
+    folder: a project's Documents/ only as its 01. Documents/, directly in the project's folder, and any other folder
+    as one that is not a project's Documents folder, a project folder (one holding Pace project.md) before a folder of
+    the owner's own. A folder still there under the name as written is used first. When the rest of the path is not
+    inside it, a numbered one is tried in its place only for a project's Documents/, or as a project folder where the
+    folder there is empty, as when OneDrive makes one again under an old name: never in place of a project folder, or
+    of a folder of the owner's own that holds anything.
+
+    Names are all a path holds, so this cannot tell apart two folders that have had the same name: a path written
+    before numbering can lead to another project of the same name made since its own was renamed, moved or deleted.
+    A number changed or taken off by hand is not followed, and a confirmation of a file in such a folder reads as not
+    checked.
+    """
     parts = path.parts
 
+    def is_project(folder: Path) -> bool:
+        try:
+            return (folder / PROJECT_FILE).is_file()
+        except OSError:
+            return False
+
     def ways(here: Path, part: str) -> list:
-        found = [part] if (here / part).exists() else []
         try:
             with os.scandir(here) as entries:
-                fits = [entry.name for entry in entries if entry.name != part and folder_number(entry.name)[0] is not None
-                        and name_key(plain_name(entry.name)) == name_key(part) and entry.is_dir()]
+                names = {entry.name: entry.is_dir() for entry in entries}
         except OSError:
-            return found
-        if len(fits) > 1 and is_working_dir(part):
-            fits = [name for name in fits if is_working_dir(name)]
-        if len(fits) > 1:
-            fits = [name for name in fits if (here / name / PROJECT_FILE).is_file()]
-        return found + fits[:1] if len(fits) == 1 else found
+            return [part] if (here / part).exists() else []
+        if not (here / part).exists():  # the same name in another case or Unicode form, as some systems keep it
+            same = [name for name in names if name_key(name) == name_key(part)]
+            part = same[0] if len(same) == 1 else part
+        written = here / part
+        found = [part] if written.exists() else []
+        since = [name for name, is_dir in names.items() if is_dir and name != part and folder_number(name)[0] is not None
+                 and name_key(plain_name(name)) == name_key(part)]
+        in_project = is_project(here)
+        documents = in_project and is_working_dir(part)
+        since = [name for name in since if (in_project and is_working_dir(name)) == documents]
+        there = written.is_dir()
+        if documents:
+            fits = since
+        elif there and (is_project(written) or has_content(written)):
+            fits = []
+        else:
+            projects = [name for name in since if is_project(here / name)]
+            fits = projects or ([] if there else since)
+        return found + fits if len(fits) == 1 else found
 
     led_nowhere: set = set()
 
