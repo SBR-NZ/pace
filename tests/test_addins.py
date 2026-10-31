@@ -169,7 +169,7 @@ class ShippedAddInTests(unittest.TestCase):
             match = INDEX_LINE.match(line)
             self.assertIsNotNone(match, line)
             with self.subTest(add_in=match["name"]):
-                self.assertEqual(match["path"], f"{SHIPPED}/{match['name']}/ADD-IN.md")
+                self.assertEqual(match["path"], f"{SHIPPED.as_posix()}/{match['name']}/ADD-IN.md")
                 text = (PACE_FOLDER / match["path"]).read_text(encoding="utf-8")
                 self.assertEqual(PURPOSE.search(text)["purpose"], match["purpose"])
         help_table = section(HELP.read_text(encoding="utf-8"), "Shipped add-ins")
@@ -265,7 +265,7 @@ class ShippedAddInTests(unittest.TestCase):
                 self.assertLess(len(body), 600)
                 self.assertIn("adds no rules of its own", body)
                 self.assertIn("`Pace.md`", body)
-                self.assertIn(f"`{SHIPPED}/{name}/ADD-IN.md` or the owner's customised copy", body)
+                self.assertIn(f"`{SHIPPED.as_posix()}/{name}/ADD-IN.md` or the owner's customised copy", body)
                 self.assertIn("it is off", body)
 
     def test_launchers_are_not_discovered_at_startup(self):
@@ -332,7 +332,7 @@ class CustomisedCopyLinkTests(unittest.TestCase):
                 self.assertIn("open `Pace.md`", body)
                 self.assertIn("owner's customised copy", body)
                 self.assertNotRegex(body, r"\]\(")
-                index_path = f"{MY_ADD_INS}/{name} - mine/ADD-IN.md"
+                index_path = f"{MY_ADD_INS.as_posix()}/{name} - mine/ADD-IN.md"
                 folder.set_index([f"- **{name}** - My own copy. `{index_path}`"])
                 chat = Chat(folder.root)
                 self.assertEqual(chat.ask(name), Outcome("open", (name,)))
@@ -364,11 +364,11 @@ class CustomisedCopyLinkTests(unittest.TestCase):
     def test_help_names_the_older_place_only_where_it_explains_older_folders(self):
         text = HELP.read_text(encoding="utf-8")
         rest = text.replace(section(text, "Add-ins in an older folder"), "")
-        self.assertNotIn(str(OLDER_MY_ADD_INS), rest)
+        self.assertNotIn(OLDER_MY_ADD_INS.as_posix(), rest)
         paths = re.findall(r"`([^`]*My add-ins[^`]*)`", rest)
         self.assertTrue(paths)
         for path in paths:
-            self.assertTrue(path.startswith(f"{MY_ADD_INS}/"), path)
+            self.assertTrue(path.startswith(f"{MY_ADD_INS.as_posix()}/"), path)
 
 
 class OlderFolderTests(unittest.TestCase):
@@ -392,7 +392,7 @@ class OlderFolderTests(unittest.TestCase):
         (folder.root / OLDER_MY_ADD_INS).mkdir(parents=True)
         (folder.root / OLDER_MY_ADD_INS / ".gitkeep").write_bytes(b"")
         pace = folder.root / "Pace.md"
-        pace.write_text(pace.read_text(encoding="utf-8").replace(f"`{MY_ADD_INS}/`", f"`{OLDER_MY_ADD_INS}/`"), encoding="utf-8")
+        pace.write_text(pace.read_text(encoding="utf-8").replace(f"`{MY_ADD_INS.as_posix()}/`", f"`{OLDER_MY_ADD_INS.as_posix()}/`"), encoding="utf-8")
 
     def test_copies_in_the_older_place_keep_opening_and_their_links_resolve(self):
         for name in CATALOGUE:
@@ -403,7 +403,7 @@ class OlderFolderTests(unittest.TestCase):
                 self.assertTrue(links)
                 for link in links:
                     self.assertTrue((add_in.parent / link).resolve().is_file(), link)
-                folder.set_index([f"- **{name}** - My own copy. `{OLDER_MY_ADD_INS}/{name} - mine/ADD-IN.md`"])
+                folder.set_index([f"- **{name}** - My own copy. `{OLDER_MY_ADD_INS.as_posix()}/{name} - mine/ADD-IN.md`"])
                 chat = Chat(folder.root)
                 self.assertEqual(chat.ask(name), Outcome("open", (name,)))
                 self.assertEqual(chat.opened[-1], add_in)
@@ -411,16 +411,16 @@ class OlderFolderTests(unittest.TestCase):
     def test_following_the_move_steps_keeps_every_copy_working(self):
         steps = self.move_steps()
         self.assertEqual(len(steps), 4)
-        self.assertIn(f"from `{OLDER_MY_ADD_INS}/` into `{MY_ADD_INS}/`", steps[0])
+        self.assertIn(f"from `{OLDER_MY_ADD_INS.as_posix()}/` into `{MY_ADD_INS.as_posix()}/`", steps[0])
         [(old_link, new_link)] = re.findall(r"change `(\.\./[^`]*)` to `(\.\./[^`]*)`", steps[1])
         [(old_path, new_path)] = re.findall(r"change `([^`]+)` to `([^`]+)`", steps[2])
-        self.assertEqual((old_path, new_path), (f"{OLDER_MY_ADD_INS}/", f"{MY_ADD_INS}/"))
+        self.assertEqual((old_path, new_path), (f"{OLDER_MY_ADD_INS.as_posix()}/", f"{MY_ADD_INS.as_posix()}/"))
         self.assertIn("`.gitkeep`", steps[3])
         for name in CATALOGUE:
             with self.subTest(add_in=name), InventedFolder() as folder:
                 self.make_older(folder)
                 self.older_copy(folder, name)
-                folder.set_index([f"- **{name}** - My own copy. `{OLDER_MY_ADD_INS}/{name} - mine/ADD-IN.md`"])
+                folder.set_index([f"- **{name}** - My own copy. `{OLDER_MY_ADD_INS.as_posix()}/{name} - mine/ADD-IN.md`"])
                 # 1. Move the whole folder, keeping its name.
                 (folder.root / MY_ADD_INS).mkdir()
                 shutil.move(str(folder.root / OLDER_MY_ADD_INS / f"{name} - mine"), str(folder.root / MY_ADD_INS / f"{name} - mine"))
@@ -442,7 +442,7 @@ class OlderFolderTests(unittest.TestCase):
                 pace_text = pace.read_text(encoding="utf-8")
                 self.assertNotIn("Pace/Add-ins", pace_text)
                 self.assertEqual(pace_text, (PACE_FOLDER / "Pace.md").read_text(encoding="utf-8").replace(
-                    "None switched on yet.", f"- **{name}** - My own copy. `{MY_ADD_INS}/{name} - mine/ADD-IN.md`"))
+                    "None switched on yet.", f"- **{name}** - My own copy. `{MY_ADD_INS.as_posix()}/{name} - mine/ADD-IN.md`"))
                 chat = Chat(folder.root)
                 self.assertEqual(chat.ask(name), Outcome("open", (name,)))
                 self.assertEqual(chat.opened[-1], add_in)
@@ -465,7 +465,7 @@ class RoutingTests(unittest.TestCase):
             "customised copy": lambda folder: (
                 folder.customise("Daily brief", "Daily brief - mine"),
                 folder.set_index([
-                    f"- **Daily brief** - My own brief. `{MY_ADD_INS}/Daily brief - mine/ADD-IN.md`",
+                    f"- **Daily brief** - My own brief. `{MY_ADD_INS.as_posix()}/Daily brief - mine/ADD-IN.md`",
                 ]),
             ),
         }
@@ -497,7 +497,7 @@ class RoutingTests(unittest.TestCase):
         with InventedFolder() as folder:
             copy = folder.customise("Daily brief", "Daily brief - mine")
             folder.set_index([
-                f"- **Daily brief** - Gather what needs me today, client calls first. `{MY_ADD_INS}/Daily brief - mine/ADD-IN.md`",
+                f"- **Daily brief** - Gather what needs me today, client calls first. `{MY_ADD_INS.as_posix()}/Daily brief - mine/ADD-IN.md`",
             ])
             chat = Chat(folder.root)
             self.assertEqual(chat.ask("Daily brief please"), Outcome("open", ("Daily brief",)))
@@ -529,16 +529,16 @@ class RoutingTests(unittest.TestCase):
             folder.customise("Daily brief", "Daily brief - mine")
             folder.set_index([
                 next(line for line in catalogue_lines() if line.startswith("- **Daily brief** ")),
-                f"- **Daily brief** - My own brief. `{MY_ADD_INS}/Daily brief - mine/ADD-IN.md`",
+                f"- **Daily brief** - My own brief. `{MY_ADD_INS.as_posix()}/Daily brief - mine/ADD-IN.md`",
             ])
             chat = Chat(folder.root)
             self.assertEqual(chat.ask("daily brief"), Outcome("ask", ("Daily brief", "Daily brief")))
             self.assertEqual(len(chat.opened), 1)
 
         with InventedFolder() as folder:
-            folder.set_index([f"- **Board notes** - Invented owner add-in. `{MY_ADD_INS}/Board notes/ADD-IN.md`"])
+            folder.set_index([f"- **Board notes** - Invented owner add-in. `{MY_ADD_INS.as_posix()}/Board notes/ADD-IN.md`"])
             chat = Chat(folder.root)
-            self.assertEqual(chat.ask("board notes"), Outcome("missing", (f"{MY_ADD_INS}/Board notes/ADD-IN.md",)))
+            self.assertEqual(chat.ask("board notes"), Outcome("missing", (f"{MY_ADD_INS.as_posix()}/Board notes/ADD-IN.md",)))
             self.assertEqual(len(chat.opened), 1)
 
     def test_malformed_index_line_is_refused(self):

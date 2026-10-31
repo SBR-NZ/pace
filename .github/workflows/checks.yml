@@ -1,0 +1,70 @@
+# Runs the checks in tests/ on Linux, Windows and macOS for each pull request, because the folders Pace works in
+# behave differently on each: Windows and macOS ignore letter case in names, and each has its own rules for names,
+# paths and renames. Each check that does not pass is noted on the pull request, as .github/run_checks.py describes.
+name: Checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:  # a newer push to the same pull request stops the run still going for the older one
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    # Each release copies this repository, this file too, into the public release repository, where it never runs.
+    if: github.repository == 'Daniel-SBRNZ/pace-dev'
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15  # the checks take about 6 minutes on Windows and 2 elsewhere
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux, Python 3.9
+            os: ubuntu-24.04  # the newest Ubuntu GitHub has Python 3.9 for; 3.9 is the oldest Python Pace supports
+            python: "3.9"
+          - name: Linux, newest Python
+            os: ubuntu-latest
+            python: "3.x"
+          - name: Windows, newest Python
+            os: windows-latest
+            python: "3.x"
+          - name: macOS, Apple's Python
+            os: macos-latest
+            python: apple  # the python3 that comes with Apple's command line tools, which a Mac with no other runs
+    defaults:
+      run:
+        shell: bash  # Git Bash on Windows, the shell Claude Code uses there
+    steps:
+      - name: Keep the repository's line endings
+        run: git config --global core.autocrlf false
+      - name: Keep temporary folders on a plain path
+        # Windows' usual one is named in its short form, C:\Users\RUNNER~1\..., and macOS' is reached through a link
+        # from /var; an owner's Pace folder has neither.
+        run: |
+          echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - if: matrix.python != 'apple'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - if: runner.os == 'Windows'
+        name: Add the time zone data Python lacks on Windows, as Pace's help asks
+        # Pinned by hash to a release at least two weeks old when chosen: 2026.5, published 3 October 2026.
+        run: |
+          echo "tzdata==2026.5 --hash=sha256:b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac" > "$RUNNER_TEMP/tzdata.txt"
+          python -m pip install --disable-pip-version-check --quiet --require-hashes -r "$RUNNER_TEMP/tzdata.txt"
+      - name: Run the checks
+        run: |
+          if [ "${{ matrix.python }}" = apple ]; then python=/usr/bin/python3; else python=python; fi
+          "$python" --version
+          "$python" -B .github/run_checks.py

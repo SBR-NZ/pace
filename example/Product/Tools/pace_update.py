@@ -178,10 +178,16 @@ def _is_link(path: Path) -> bool:
 
 
 def _remove_tree(path: Path) -> None:
+    """Remove a folder of the updater's own and everything in it: its throwaway copy of a release, the update's work
+    area, or a partly made Pace folder. Anything already gone, the folder itself or a file in it, needs nothing more;
+    anything that cannot be removed stops it, so a folder still being written to is never called removed."""
     def clear_read_only(func, target, error):
         # Windows will not delete a read-only file: clear that flag and try once more. Other
         # permission bits are kept, so a folder that still cannot be removed stays readable.
+        # Something already gone, such as a lock file another program removed, needs nothing more.
         problem = error[1] if isinstance(error, tuple) else error
+        if isinstance(problem, FileNotFoundError):
+            return
         if func not in (os.unlink, os.remove, os.rmdir) or not isinstance(problem, PermissionError):
             raise problem
         os.chmod(target, stat.S_IMODE(os.lstat(target).st_mode) | stat.S_IWRITE)
@@ -331,11 +337,16 @@ def _check_paths(paths) -> None:
 
 # --------------------------------------------------------------------- git source
 
+# Newer git tidies a repository in the background after a fetch, writing into it after the fetch returns, while the
+# updater removes its throwaway store: so no git command it runs starts that tidying.
+GIT_SETTINGS = ("-c", "maintenance.auto=false", "-c", "gc.auto=0")
+
+
 def _git(args, *, data: bytes | None = None) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["GIT_TERMINAL_PROMPT"] = "0"  # fail instead of waiting for a password prompt
     try:
-        return subprocess.run(["git", *args], input=data, capture_output=True, env=env, check=False)
+        return subprocess.run(["git", *GIT_SETTINGS, *args], input=data, capture_output=True, env=env, check=False)
     except FileNotFoundError:
         raise Stop("git is not installed or not on the PATH. The updater needs git to read the release.") from None
 

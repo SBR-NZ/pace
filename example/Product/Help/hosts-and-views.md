@@ -63,7 +63,7 @@ A view is a dated **snapshot of records**, never the place to change a job's sta
 
 ## The overview tool
 
-`Product/Tools/pace_overview.py` makes the Project overview page, and the Weekly review add-in's list, from the records, with Python 3.9 or later and nothing else. Run it from the Pace folder. It reads every record and project with the record tool's own readers, follows corrections and withdrawals to each item's current account, works out the counts and order from the dates in the owner's time zone (from the `Time zone:` line in `Pace.md`, or this computer's when there is none), escapes every piece of record text and fills in the add-in's template. It changes no record. With `--save` it creates only a new page in `2 Views/`, never replacing a file, and reads it back.
+`Product/Tools/pace_overview.py` makes the Project overview page, and the Weekly review add-in's list, from the records, with Python 3.9 or later and nothing else, except on Windows Python's `tzdata` package to read the owner's time zone. Run it from the Pace folder. It reads every record and project with the record tool's own readers, follows corrections and withdrawals to each item's current account, works out the counts and order from the dates in the owner's time zone (from the `Time zone:` line in `Pace.md`, or this computer's when there is none), escapes every piece of record text and fills in the add-in's template. It changes no record. With `--save` it creates only a new page in `2 Views/`, never replacing a file, and reads it back.
 
 ```text
 python3 Product/Tools/pace_overview.py --asked "<the owner's question>" --save

@@ -1989,24 +1989,40 @@ def numbered_path(pace: Path, path: Path):
     return Path(*followed) if followed else None
 
 
+def system_rename_no_replace(source: Path, target: Path) -> bool:
+    """Ask the system itself to rename without replacing anything at the target, as Linux (renameat2) and macOS
+    (renamex_np) can: True once renamed; False where it cannot be asked, or this folder cannot do it. Raises OSError,
+    such as FileExistsError when something is at the target, when the system refused."""
+    linux, mac = sys.platform.startswith("linux"), sys.platform == "darwin"
+    if os.name == "nt" or not (linux or mac):
+        return False
+    try:
+        import ctypes  # some Python builds have no ctypes; then the target is looked for just before
+        call = getattr(ctypes.CDLL(None, use_errno=True), "renameat2" if linux else "renamex_np")
+    except (ImportError, OSError, AttributeError):
+        return False
+    old, new = os.fsencode(str(source)), os.fsencode(str(target))
+    if linux:
+        call.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        here = -100  # AT_FDCWD
+        arguments = (here, old, here, new, 1)  # RENAME_NOREPLACE
+    else:
+        call.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        arguments = (old, new, 4)  # RENAME_EXCL
+    call.restype = ctypes.c_int
+    if call(*arguments) == 0:
+        return True
+    failed = ctypes.get_errno()
+    if failed in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP):
+        return False
+    raise OSError(failed, os.strerror(failed), str(target))
+
+
 def rename_no_replace(source: Path, target: Path) -> None:
-    """Rename, refusing to replace a file or folder already at the target. Windows always refuses; on Linux the kernel
-    is asked to refuse; elsewhere, or where a folder cannot do that, the target is looked for just before."""
-    if os.name != "nt" and sys.platform.startswith("linux"):
-        try:
-            import ctypes  # some Python builds have no ctypes; then the target is looked for just before
-            renameat2 = ctypes.CDLL(None, use_errno=True).renameat2
-        except (ImportError, OSError, AttributeError):
-            renameat2 = None
-        if renameat2 is not None:
-            renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-            renameat2.restype = ctypes.c_int
-            here = -100  # AT_FDCWD
-            if renameat2(here, os.fsencode(str(source)), here, os.fsencode(str(target)), 1) == 0:  # RENAME_NOREPLACE
-                return
-            failed = ctypes.get_errno()
-            if failed not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP):
-                raise OSError(failed, os.strerror(failed), str(target))
+    """Rename, refusing to replace a file or folder already at the target. Windows always refuses; on Linux and macOS
+    the system is asked to refuse; elsewhere, or where a folder cannot do that, the target is looked for just before."""
+    if system_rename_no_replace(source, target):
+        return
     if os.name != "nt" and os.path.lexists(target):
         raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(target))
     os.rename(source, target)  # on Windows this refuses an existing target itself

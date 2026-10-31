@@ -2,6 +2,14 @@
 
 Versions use `MAJOR.MINOR.PATCH`. This file describes repository changes, not an installation receipt or an owner's approval.
 
+## 3.16.2 - Windows and macOS
+
+- **The checks run on Linux, Windows and macOS** for each pull request: on Linux with Python 3.9 and the newest Python, on Windows with the newest Python, and on macOS with Apple's own `python3`. Each check that does not pass is noted on the pull request, and every one is listed on the run's summary page (`.github/`).
+- **macOS refuses to rename over a file that arrived after Pace looked**, as Linux and Windows already did, wherever its file system can refuse, as APFS, where OneDrive keeps its files on a Mac, can. So a record archived into its month folder, or a folder being numbered, does not replace a copy a sync client put there at the last moment. On a drive or share that cannot refuse, such as exFAT or a network share, Pace still looks just before, as before.
+- **Updates with newer git.** The updater's git commands no longer start git's background tidying. With git 2.56 that tidying was still writing in the updater's throwaway copy of the release while it was removed, so an update could stop on a file error, such as one about `maintenance.lock`, instead of saying why it stopped. When the updater removes a folder of its own, such as that copy, the update's work area or a partly made Pace folder, a file already gone is passed over.
+- **Windows needs Python's `tzdata` package** to read the owner's time zone; without it, date searches and the overview stop rather than guess, as before. Help: health check and assistants and dated views say so, and Getting started installs it only on the owner's yes.
+- Tests: the checks that assumed Linux now hold on each system. Paths shown in text use `/`, names Windows cannot hold are swapped there for ones it can, a name that is not valid text is skipped where it cannot be spelled, and the working folder is restored before its temporary folder is removed.
+
 ## 3.16.1 - Safer record paths through numbered folders
 
 - **A record's path is followed only to a folder of the same kind.** From 3.16.0 the tools follow a path a record wrote through folders numbered since, by each folder's name after its number. They now take only a folder of the same kind:

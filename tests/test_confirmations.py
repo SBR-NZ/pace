@@ -48,8 +48,14 @@ class ConfirmationTests(PaceFolder):
         # They used to start from the current folder, so the paths the help shows failed from anywhere else.
         elsewhere = Path(self._tmp.name) / "elsewhere"
         elsewhere.mkdir()
-        self.addCleanup(os.chdir, os.getcwd())
+        previous = os.getcwd()
         os.chdir(elsewhere)
+        try:
+            self.check_relative_files()
+        finally:
+            os.chdir(previous)  # before tearDown removes the folder, as Windows will not remove the current folder
+
+    def check_relative_files(self):
         relative = f"{BUDGET_DIR}/{DOCS}/close.txt"
         out, code = self.run_tool("propose", "--act", "Accept October close", "--act-file", relative)
         self.assertEqual((out["status"], code), ("proposed", 0), out)

@@ -35,6 +35,12 @@ AS_AT = "2026-11-02T09:00:00+13:00"  # Monday 2 November 2026 in Auckland; still
 OWNER = "Rangi Parata"
 
 
+def markup(text: str) -> str:
+    """Text as the page writes it, so that no name or record can add markup."""
+    return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+            .replace("'", "&#39;"))
+
+
 class Folder:
     """An invented Pace folder: the shipped template folder plus projects and records written here."""
 
@@ -634,16 +640,21 @@ class PageTests(OverviewCase):
     def test_no_text_from_records_or_folders_can_add_markup_in_any_view(self):
         f = self.f
         hostile = '<b>x</b> & "q" \'s\' </li></ul>'
-        parent_name, child_name, idle_name = '<i>Evil<b> & "Co"', "<u>Kid's", "<q>Idle"  # folder names cannot hold "/"
+        # Folder and file names cannot hold "/", and on Windows not < > or " either, so there they carry & and ' only.
+        names = ('<i>Evil<b> & "Co"', "<u>Kid's", "<q>Idle", '<b>doc & "q".txt', "<i>odd & 'x'.md")
+        if os.name == "nt":
+            names = ("Evil & Co", "Kid's", "Idle", "doc & 'q'.txt", "odd & 'x'.md")
+        parent_name, child_name, idle_name, doc_name, odd_name = names
         parent = f.project("evil", parent_name, purpose=hostile)
         child = f.project("evil-kid", child_name, parent="evil", purpose=hostile)
         f.project("idle", idle_name)
-        (f.root / "1 Projects" / parent_name / "Documents" / '<b>doc & "q".txt').write_text("x", encoding="utf-8")
+        (f.root / "1 Projects" / parent_name / "Documents" / doc_name).write_text("x", encoding="utf-8")
         f.action(parent, hostile, body=hostile, due="2026-11-03", owed_by=hostile, **{"for": hostile})
         f.action(child, "Second", body=hostile, owed_by="Sam <Lee>", **{"for": OWNER})
-        (f.root / "Record/<i>odd & 'x'.md").write_text("x", encoding="utf-8")  # named on the Could not read line
-        escaped = {"parent": "&lt;i&gt;Evil&lt;b&gt; &amp; &quot;Co&quot;", "child": "&lt;u&gt;Kid&#39;s",
-                   "idle": "&lt;q&gt;Idle", "text": "&lt;b&gt;x&lt;/b&gt; &amp; &quot;q&quot; &#39;s&#39; &lt;/li&gt;&lt;/ul&gt;"}
+        (f.root / "Record" / odd_name).write_text("x", encoding="utf-8")  # named on the Could not read line
+        escaped = {"parent": markup(parent_name), "child": markup(child_name), "idle": markup(idle_name),
+                   "text": "&lt;b&gt;x&lt;/b&gt; &amp; &quot;q&quot; &#39;s&#39; &lt;/li&gt;&lt;/ul&gt;"}
+        self.assertEqual(markup('<i>Evil<b> & "Co"'), "&lt;i&gt;Evil&lt;b&gt; &amp; &quot;Co&quot;")
         pages = {}
         for name, view in (("every", []), ("person", ["--by-person"]), ("parent", ["--project", parent]),
                            ("child", ["--project", child])):
@@ -662,10 +673,10 @@ class PageTests(OverviewCase):
         self.assertIn(f"<h1>{escaped['parent']}</h1>", pages["parent"])
         self.assertIn(f'<span class="pname">{escaped["child"]}</span>', self.row(pages["parent"], "evil-kid"))
         self.assertIn(f'<p class="lead">{escaped["text"]}</p>', pages["parent"])
-        self.assertIn("&lt;b&gt;doc &amp; &quot;q&quot;.txt", pages["parent"])
+        self.assertIn(markup(doc_name), pages["parent"])
         self.assertIn(f"<h1>{escaped['child']}</h1>", pages["child"])
         self.assertIn(f"<span>Part of <strong>{escaped['parent']}</strong></span>", pages["child"])
-        self.assertIn("&lt;i&gt;odd &amp; &#39;x&#39;.md", every)
+        self.assertIn(markup(odd_name), every)
 
     def test_an_unknown_project_makes_nothing(self):
         out, code = self.f.run("--project", "nope", "--save")

@@ -276,8 +276,8 @@ class HealthCheckFindings(CheckCase):
         self.assertNotIn("owner (", item["message"])
 
     def test_l11_a_file_name_that_is_not_text_still_gives_one_json_object(self):
-        name = os.fsdecode(b"\xff\xfe-notes.md")
         try:
+            name = os.fsdecode(b"\xff\xfe-notes.md")  # Windows cannot spell such a name at all
             (self.pace / "Record" / name).write_text("x", encoding="utf-8")
         except (OSError, UnicodeError):
             self.skipTest("this file system cannot hold such a name")
